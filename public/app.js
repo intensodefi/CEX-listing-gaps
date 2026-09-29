@@ -412,50 +412,60 @@ function shortAddress(address) {
 
 function renderPlatform(container, profile) {
   container.replaceChildren();
+  const box = document.createElement("div");
+  box.className = "platform";
   if (!view.snapshot?.profilesReady) {
-    container.textContent = "…";
+    box.textContent = "…";
+    container.append(box);
     return;
   }
   const name = document.createElement("b");
   name.textContent = profile ? platformLabel(profile) : "—";
-  container.append(name);
+  box.append(name);
   if (profile?.tokenAddress) {
     const address = document.createElement("small");
     address.title = profile.tokenAddress;
     address.textContent = shortAddress(profile.tokenAddress);
-    container.append(address);
+    box.append(address);
   }
+  container.append(box);
 }
 
 function renderTags(container, tags) {
   container.replaceChildren();
+  const box = document.createElement("div");
+  box.className = "tags";
   if (!view.snapshot?.profilesReady) {
-    container.textContent = "…";
+    box.textContent = "…";
+    container.append(box);
     return;
   }
   if (!tags.length) {
-    container.textContent = "—";
+    box.textContent = "—";
+    container.append(box);
     return;
   }
   for (const tag of tags.slice(0, TAG_LIMIT)) {
     const chip = document.createElement("span");
     chip.className = "tag";
     chip.textContent = tag;
-    container.append(chip);
+    box.append(chip);
   }
   const rest = tags.slice(TAG_LIMIT);
-  if (!rest.length) return;
-  const more = document.createElement("button");
-  more.type = "button";
-  more.className = "ex-more";
-  more.textContent = `+${rest.length}`;
-  more.setAttribute("aria-label", `${rest.length} more tags`);
-  const open = () => showTags(more, tags);
-  more.addEventListener("mouseenter", open);
-  more.addEventListener("focus", open);
-  more.addEventListener("mouseleave", scheduleHidePopover);
-  more.addEventListener("blur", scheduleHidePopover);
-  container.append(more);
+  if (rest.length) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "ex-more";
+    more.textContent = `+${rest.length}`;
+    more.setAttribute("aria-label", `${rest.length} more tags`);
+    const open = () => showTags(more, tags);
+    more.addEventListener("mouseenter", open);
+    more.addEventListener("focus", open);
+    more.addEventListener("mouseleave", scheduleHidePopover);
+    more.addEventListener("blur", scheduleHidePopover);
+    box.append(more);
+  }
+  container.append(box);
 }
 
 function exportName() {
@@ -560,8 +570,8 @@ function render() {
       </td>
       <td class="num">${escapeHtml(formatCount(asset.pairs))}</td>
       <td class="quotes"></td>
-      <td class="platform"></td>
-      <td class="tags"></td>
+      <td class="platform-cell"></td>
+      <td class="tags-cell"></td>
       <td class="missing"></td>
     `;
     const link = tr.querySelector("a");
@@ -580,8 +590,8 @@ function render() {
       ? `${shownQuotes.join(" · ")} +${extra}`
       : shownQuotes.join(" · ");
     const profile = profileFor(asset.id);
-    renderPlatform(tr.querySelector(".platform"), profile);
-    renderTags(tr.querySelector(".tags"), profile?.tags || []);
+    renderPlatform(tr.querySelector(".platform-cell"), profile);
+    renderTags(tr.querySelector(".tags-cell"), profile?.tags || []);
     renderMissing(
       tr.querySelector(".missing"),
       missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present),
