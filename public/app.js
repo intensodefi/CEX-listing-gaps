@@ -71,7 +71,7 @@ function fillSelect(select, resolved, selected, fallback) {
     const choice = document.createElement("option");
     choice.value = option.id;
     const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
-    choice.textContent = `${option.menuName}${pairs}`;
+    choice.textContent = `${option.name}${pairs}`;
     group.append(choice);
   }
   const ids = OPTIONS.map((option) => option.id);
