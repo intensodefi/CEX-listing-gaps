@@ -4,14 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CEX listing gaps</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="mast">
       <div>
-        <p class="eyebrow">CoinMarketCap · active exchange markets</p>
+        <p class="eyebrow">CoinMarketCap · every market pair</p>
         <h1>Listing gaps</h1>
-        <p class="lede" id="lede">Which top assets trade on one major exchange and not another.</p>
+        <p class="lede" id="lede">Assets with a spot, perpetual, or futures pair on one major exchange and not another.</p>
       </div>
       <div class="mast-meta">
         <p id="status-line">Waiting for market data</p>
@@ -20,6 +21,14 @@
     </header>
 
     <section class="controls" aria-label="Comparison">
+      <fieldset class="markets">
+        <legend>Market</legend>
+        <div id="markets" class="segment"></div>
+      </fieldset>
+      <label>
+        Region
+        <select id="region"></select>
+      </label>
       <label>
         Listed on
         <select id="present"></select>
@@ -44,7 +53,7 @@
     <section class="panel">
       <div class="panel-head">
         <h2>Gap map</h2>
-        <p>Each cell is the number of assets listed on the row exchange and missing from the column exchange. Select a cell to open that pair.</p>
+        <p id="matrix-note">Each cell counts base assets with at least one pair on the row exchange and none on the column exchange.</p>
       </div>
       <div class="matrix-scroll">
         <div id="matrix" class="matrix"></div>
@@ -60,12 +69,9 @@
         <table>
           <thead>
             <tr>
-              <th><button type="button" data-sort="rank">Rank</button></th>
               <th><button type="button" data-sort="symbol">Asset</button></th>
-              <th><button type="button" data-sort="price">Price</button></th>
-              <th><button type="button" data-sort="marketCap">Market cap</button></th>
-              <th><button type="button" data-sort="change24h">24h</button></th>
-              <th><button type="button" data-sort="markets">Markets</button></th>
+              <th><button type="button" data-sort="pairs">Pairs</button></th>
+              <th>Quotes</th>
               <th>Also missing from</th>
             </tr>
           </thead>
@@ -77,8 +83,10 @@
 
     <footer>
       <p>
-        Listed means CoinMarketCap currently tracks an active market for that asset on the exchange.
-        The universe is the top assets by market cap. The API key stays on the server.
+        A coin is listed only when it is the base of at least one pair in the selected market.
+        Spot, perpetual, and dated futures are counted separately.
+        Spot pairs come from CoinMarketCap exchange markets. Perpetual and futures pairs come from the Pro derivatives endpoint.
+        Region is the exchange's home market.
       </p>
     </footer>
     <script type="module" src="/app.js"></script>

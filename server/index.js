@@ -64,6 +64,12 @@ function serveStatic(response, file) {
 const server = http.createServer((request, response) => {
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
 
+  if (request.method === "GET" && url.pathname === "/favicon.ico") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/snapshot") {
     sendJson(response, 200, getState());
     return;
@@ -121,7 +127,8 @@ server.listen(PORT, "0.0.0.0", () => {
   }
   refreshSnapshot()
     .then((snapshot) => {
-      console.log(`Snapshot ready: ${snapshot.coins.length} assets, ${snapshot.failures.length} skipped`);
+      const feeds = Object.values(snapshot.books).reduce((sum, book) => sum + Object.keys(book).length, 0);
+      console.log(`Snapshot ready: ${feeds} exchange markets, ${snapshot.failures.length} failed`);
     })
     .catch((error) => {
       console.error("Initial refresh failed:", error.message);

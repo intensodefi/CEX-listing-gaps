@@ -1,81 +1,122 @@
-import { EXCHANGES } from "/shared/exchanges.js";
-import { buildMatrix, filterGaps, missingElsewhere, overlapStats } from "/shared/compare.js";
+import { EXCHANGES, MARKETS, REGIONS, exchangesInRegion, regionName } from "/shared/exchanges.js";
+import { buildMatrix, comparisonState, filterGaps, missingElsewhere, overlapStats } from "/shared/compare.js";
 
 const presentSelect = document.querySelector("#present");
 const absentSelect = document.querySelector("#absent");
+const regionSelect = document.querySelector("#region");
 const queryInput = document.querySelector("#query");
 const stableInput = document.querySelector("#include-stable");
 const statusLine = document.querySelector("#status-line");
 const lede = document.querySelector("#lede");
 const statsEl = document.querySelector("#stats");
 const matrixEl = document.querySelector("#matrix");
+const matrixNote = document.querySelector("#matrix-note");
 const rowsEl = document.querySelector("#rows");
 const emptyEl = document.querySelector("#empty");
 const tableTitle = document.querySelector("#table-title");
 const tableNote = document.querySelector("#table-note");
+const marketsEl = document.querySelector("#markets");
 
-const state = {
+const view = {
   snapshot: null,
-  sort: "rank",
-  direction: 1,
+  market: "spot",
+  region: "all",
+  sort: "pairs",
+  direction: -1,
   timer: null,
 };
 
-for (const exchange of EXCHANGES) {
-  for (const select of [presentSelect, absentSelect]) {
-    const option = document.createElement("option");
-    option.value = exchange.slug;
-    option.textContent = exchange.name;
-    select.append(option);
-  }
+for (const market of MARKETS) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = market.name;
+  button.dataset.market = market.id;
+  button.className = market.id === view.market ? "on" : "";
+  button.addEventListener("click", () => {
+    view.market = market.id;
+    for (const item of marketsEl.querySelectorAll("button")) {
+      item.classList.toggle("on", item.dataset.market === view.market);
+    }
+    render();
+  });
+  marketsEl.append(button);
 }
-presentSelect.value = "binance";
-absentSelect.value = "coinbase-exchange";
+
+for (const region of REGIONS) {
+  const option = document.createElement("option");
+  option.value = region.id;
+  option.textContent = region.name;
+  regionSelect.append(option);
+}
+
+function marketName(id) {
+  return MARKETS.find((market) => market.id === id)?.name || id;
+}
 
 function exchangeName(slug) {
   return EXCHANGES.find((exchange) => exchange.slug === slug)?.name || slug;
 }
 
-function formatUsd(value, digits) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: digits,
-  }).format(value);
+function book() {
+  return view.snapshot?.books?.[view.market] || {};
 }
 
-function formatPrice(value) {
-  if (value === null || value === undefined) return "—";
-  if (value >= 1000) return formatUsd(value, 0);
-  if (value >= 1) return formatUsd(value, 2);
-  if (value >= 0.01) return formatUsd(value, 4);
-  return formatUsd(value, 6);
-}
-
-function formatCap(value) {
-  if (value === null || value === undefined) return "—";
-  const abs = Math.abs(value);
-  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-  return formatUsd(value, 0);
-}
-
-function formatPct(value) {
-  if (value === null || value === undefined) return "—";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
+function visibleExchanges() {
+  return exchangesInRegion(EXCHANGES, view.region);
 }
 
 function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (char) => ({
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;",
   }[char]));
+}
+
+function formatCount(value) {
+  if (value === null || value === undefined) return "—";
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function fillExchangeSelects() {
+  const exchanges = visibleExchanges();
+  const currentBook = book();
+  const previousPresent = presentSelect.value;
+  const previousAbsent = absentSelect.value;
+  for (const select of [presentSelect, absentSelect]) {
+    select.replaceChildren();
+    for (const exchange of exchanges) {
+      const entry = currentBook[exchange.slug];
+      const option = document.createElement("option");
+      option.value = exchange.slug;
+      const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
+      option.textContent = `${exchange.name}${pairs}`;
+      select.append(option);
+    }
+  }
+  const slugs = exchanges.map((exchange) => exchange.slug);
+  const preferred = preferredPair(slugs);
+  presentSelect.value = slugs.includes(previousPresent) ? previousPresent : preferred[0];
+  const absentStillValid = slugs.includes(previousAbsent) && previousAbsent !== presentSelect.value;
+  absentSelect.value = absentStillValid ? previousAbsent : preferred[1];
+  if (!absentSelect.value || absentSelect.value === presentSelect.value) {
+    absentSelect.value = slugs.find((slug) => slug !== presentSelect.value) || presentSelect.value;
+  }
+}
+
+function preferredPair(slugs) {
+  const pairs = [
+    ["binance", "coinbase-exchange"],
+    ["upbit", "bithumb"],
+    ["bitflyer", "bitbank"],
+    ["bitstamp", "bitvavo"],
+  ];
+  for (const [left, right] of pairs) {
+    if (slugs.includes(left) && slugs.includes(right)) return [left, right];
+  }
+  return [slugs[0] || "", slugs[1] || slugs[0] || ""];
 }
 
 function gapColor(count, maxGap) {
@@ -88,15 +129,17 @@ function gapColor(count, maxGap) {
 }
 
 function renderStatus() {
-  const snapshot = state.snapshot;
+  const snapshot = view.snapshot;
   if (!snapshot) {
     statusLine.textContent = "Contacting the server";
     return;
   }
-  if (snapshot.phase === "loading") {
+  if (snapshot.phase === "loading" || snapshot.phase === "idle") {
     const pct = snapshot.total ? Math.round((snapshot.done / snapshot.total) * 100) : 0;
-    statusLine.innerHTML = `Reading exchange maps ${snapshot.done}/${snapshot.total}`;
-    lede.innerHTML = `Checking which major exchanges track each asset. <span class="progress"><span style="width:${pct}%"></span></span>`;
+    statusLine.textContent = snapshot.detail
+      ? `Reading ${snapshot.detail} (${snapshot.done}/${snapshot.total})`
+      : `Reading pairs ${snapshot.done}/${snapshot.total}`;
+    lede.innerHTML = `Collecting every spot, perpetual, and futures pair. <span class="progress"><span style="width:${pct}%"></span></span>`;
     return;
   }
   if (snapshot.phase === "error") {
@@ -104,134 +147,156 @@ function renderStatus() {
     return;
   }
   const when = snapshot.updatedAt ? new Date(snapshot.updatedAt).toLocaleString() : "just now";
-  const skipped = snapshot.failures?.length ? ` · ${snapshot.failures.length} skipped` : "";
+  const skipped = snapshot.failures?.length ? ` · ${snapshot.failures.length} feeds failed` : "";
   statusLine.textContent = `Updated ${when}${skipped}`;
-  lede.textContent = `Top ${snapshot.universeSize} assets by market cap. A gap means the asset is tracked on one exchange and not the other.`;
+  lede.textContent = `${marketName(view.market)} pairs only. ${regionName(view.region)} exchanges. Listing means the asset is the base of at least one pair.`;
 }
 
 function render() {
   renderStatus();
-  const snapshot = state.snapshot;
-  const coins = snapshot?.coins || [];
-  const includeStable = stableInput.checked;
+  fillExchangeSelects();
+  const currentBook = book();
+  const exchanges = visibleExchanges();
   const present = presentSelect.value;
   const absent = absentSelect.value;
-  const same = present === absent;
+  const state = comparisonState(currentBook, present, absent);
+  const stats = state.ok ? overlapStats(currentBook, present, absent, stableInput.checked) : null;
 
-  const stats = same ? null : overlapStats(coins, present, absent, includeStable);
-  statsEl.innerHTML = "";
-  const cards = same
-    ? [["—", "Choose two exchanges"]]
-    : [
-        [String(stats.gap), `On ${exchangeName(present)}, not on ${exchangeName(absent)}`],
-        [String(stats.reverseGap), `On ${exchangeName(absent)}, not on ${exchangeName(present)}`],
-        [stats.coverage === null ? "—" : `${Math.round(stats.coverage * 100)}%`, `${exchangeName(absent)} coverage of ${exchangeName(present)}`],
-        [String(stats.considered), includeStable ? "Assets in view" : "Assets in view, stablecoins hidden"],
-      ];
+  statsEl.replaceChildren();
+  const cards = stats
+    ? [
+        [formatCount(stats.gap), `On ${exchangeName(present)}, not on ${exchangeName(absent)}`],
+        [formatCount(stats.reverseGap), `On ${exchangeName(absent)}, not on ${exchangeName(present)}`],
+        [formatCount(stats.presentPairs), `${marketName(view.market)} pairs on ${exchangeName(present)}`],
+        [formatCount(stats.onPresent), `Assets on ${exchangeName(present)}`],
+      ]
+    : [["—", state.message || "Waiting for pair data"]];
   for (const [value, label] of cards) {
     const card = document.createElement("article");
     card.className = "stat";
-    card.innerHTML = `<b></b><span></span>`;
-    card.querySelector("b").textContent = value;
-    card.querySelector("span").textContent = label;
+    const strong = document.createElement("b");
+    const span = document.createElement("span");
+    strong.textContent = value;
+    span.textContent = label;
+    card.append(strong, span);
     statsEl.append(card);
   }
 
-  const matrix = buildMatrix(coins, EXCHANGES, includeStable);
+  const matrix = buildMatrix(currentBook, exchanges, stableInput.checked);
   matrixEl.replaceChildren();
+  const columns = `118px repeat(${exchanges.length}, minmax(48px, 1fr))`;
   const head = document.createElement("div");
   head.className = "matrix-head";
+  head.style.gridTemplateColumns = columns;
   head.append(document.createElement("span"));
-  for (const exchange of EXCHANGES) {
+  for (const exchange of exchanges) {
     const label = document.createElement("span");
     label.textContent = exchange.short;
     label.title = exchange.name;
     head.append(label);
   }
   matrixEl.append(head);
+  matrixNote.textContent = `${marketName(view.market)} · ${regionName(view.region)}. Cell = assets with a pair on the row exchange and no pair on the column exchange.`;
 
   for (const row of matrix.rows) {
     const line = document.createElement("div");
     line.className = "matrix-row";
+    line.style.gridTemplateColumns = columns;
     const label = document.createElement("div");
     label.className = "row-label";
     label.textContent = exchangeName(row.slug);
+    label.title = row.ok ? `${formatCount(row.pairCount)} ${view.market} pairs` : "Pair feed unavailable";
     line.append(label);
     for (const cell of row.cells) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `cell ${cell.kind}`;
-      button.textContent = String(cell.count);
-      button.title = cell.kind === "self"
-        ? `${exchangeName(row.slug)} tracks ${cell.count} assets in this view`
-        : `${cell.count} listed on ${exchangeName(row.slug)} but not ${exchangeName(cell.slug)}`;
-      button.style.background = cell.kind === "gap" ? gapColor(cell.count, matrix.maxGap) : "";
-      if (row.slug === present && cell.slug === absent) button.classList.add("selected");
+      button.textContent = cell.count === null ? "·" : String(cell.count);
+      button.disabled = cell.kind !== "gap";
       if (cell.kind === "gap") {
+        button.style.background = gapColor(cell.count, matrix.maxGap);
+        button.title = `${cell.count} ${view.market} assets on ${exchangeName(row.slug)}, none on ${exchangeName(cell.slug)}`;
         button.addEventListener("click", () => {
           presentSelect.value = row.slug;
           absentSelect.value = cell.slug;
           render();
         });
+      } else if (cell.kind === "self") {
+        button.title = `${exchangeName(row.slug)} lists ${cell.count} ${view.market} assets`;
       }
+      if (row.slug === present && cell.slug === absent) button.classList.add("selected");
       line.append(button);
     }
     matrixEl.append(line);
   }
 
-  tableTitle.textContent = same
-    ? "Choose two different exchanges"
-    : `On ${exchangeName(present)}, not on ${exchangeName(absent)}`;
-  tableNote.textContent = same ? "" : "Sorted within the current top-asset universe.";
+  const loading = !view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle";
+  tableTitle.textContent = loading
+    ? "Collecting pairs"
+    : state.ok
+      ? `${marketName(view.market)} on ${exchangeName(present)}, not on ${exchangeName(absent)}`
+      : state.message;
+  tableNote.textContent = state.ok
+    ? "Built from every pair in this market, not a top-100 sample."
+    : "";
 
-  let gaps = same ? [] : filterGaps(coins, {
-    present,
-    absent,
-    query: queryInput.value,
-    includeStable,
-  });
+  let gaps = state.ok
+    ? filterGaps(currentBook, {
+        present,
+        absent,
+        query: queryInput.value,
+        includeStable: stableInput.checked,
+      })
+    : [];
   gaps = [...gaps].sort((a, b) => {
-    const left = a[state.sort];
-    const right = b[state.sort];
-    if (typeof left === "string") return left.localeCompare(right) * state.direction;
-    return ((left ?? 0) - (right ?? 0)) * state.direction;
+    const left = a[view.sort];
+    const right = b[view.sort];
+    if (typeof left === "string") return left.localeCompare(right) * view.direction;
+    return ((left ?? 0) - (right ?? 0)) * view.direction;
   });
 
   rowsEl.replaceChildren();
-  emptyEl.hidden = gaps.length > 0 || snapshot?.phase === "loading";
-  for (const coin of gaps) {
+  emptyEl.hidden = gaps.length > 0 || loading || !state.ok;
+  emptyEl.textContent = queryInput.value ? "No assets match this search." : "No assets match this comparison.";
+
+  for (const asset of gaps) {
     const tr = document.createElement("tr");
-    const missing = missingElsewhere(coin, EXCHANGES, absent);
-    const changeClass = coin.change24h > 0 ? "up" : coin.change24h < 0 ? "down" : "";
+    const quotes = asset.quotes || [];
+    const shownQuotes = quotes.slice(0, 4);
+    const extra = quotes.length - shownQuotes.length;
     tr.innerHTML = `
-      <td class="num">${escapeHtml(coin.rank)}</td>
       <td>
         <div class="asset">
           <div class="mark"></div>
           <div>
-            <a href="https://coinmarketcap.com/currencies/${encodeURIComponent(coin.slug)}/" target="_blank" rel="noreferrer">${escapeHtml(coin.symbol)}</a>
+            <a target="_blank" rel="noreferrer"></a>
             <small></small>
           </div>
         </div>
       </td>
-      <td class="num">${escapeHtml(formatPrice(coin.price))}</td>
-      <td class="num">${escapeHtml(formatCap(coin.marketCap))}</td>
-      <td class="num ${changeClass}">${escapeHtml(formatPct(coin.change24h))}</td>
-      <td class="num">${escapeHtml(coin.markets ?? "—")}</td>
+      <td class="num">${escapeHtml(formatCount(asset.pairs))}</td>
+      <td class="quotes"></td>
       <td><div class="pills"></div></td>
     `;
+    const link = tr.querySelector("a");
+    link.textContent = asset.symbol;
+    if (asset.slug) link.href = `https://coinmarketcap.com/currencies/${encodeURIComponent(asset.slug)}/`;
+    tr.querySelector("small").textContent = asset.name || "";
     const mark = tr.querySelector(".mark");
     const img = document.createElement("img");
     img.alt = "";
-    img.src = `https://s2.coinmarketcap.com/static/img/coins/64x64/${coin.id}.png`;
+    img.src = `https://s2.coinmarketcap.com/static/img/coins/64x64/${asset.id}.png`;
     img.addEventListener("error", () => {
-      mark.textContent = coin.symbol.slice(0, 3);
+      mark.textContent = asset.symbol.slice(0, 3);
     });
     mark.append(img);
-    tr.querySelector("small").textContent = coin.name;
+    tr.querySelector(".quotes").textContent = extra > 0
+      ? `${shownQuotes.join(" · ")} +${extra}`
+      : shownQuotes.join(" · ");
     const pills = tr.querySelector(".pills");
+    const missing = missingElsewhere(asset.id, currentBook, exchanges, absent);
     if (missing.length === 0) {
-      pills.textContent = "Listed on the other majors";
+      pills.textContent = "Listed on the other venues in this region";
     } else {
       for (const short of missing) {
         const pill = document.createElement("span");
@@ -246,15 +311,19 @@ function render() {
 
 async function pull() {
   const response = await fetch("/api/snapshot");
-  state.snapshot = await response.json();
+  view.snapshot = await response.json();
   render();
-  if (state.snapshot.phase === "loading" || state.snapshot.phase === "idle") {
-    state.timer = window.setTimeout(pull, 500);
+  if (!view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle") {
+    view.timer = window.setTimeout(pull, 700);
   }
 }
 
 presentSelect.addEventListener("change", render);
 absentSelect.addEventListener("change", render);
+regionSelect.addEventListener("change", () => {
+  view.region = regionSelect.value;
+  render();
+});
 queryInput.addEventListener("input", render);
 stableInput.addEventListener("change", render);
 document.querySelector("#swap").addEventListener("click", () => {
@@ -264,16 +333,16 @@ document.querySelector("#swap").addEventListener("click", () => {
   render();
 });
 document.querySelector("#refresh").addEventListener("click", async () => {
-  statusLine.textContent = "Refreshing from CoinMarketCap";
+  statusLine.textContent = "Refreshing every pair";
   await fetch("/api/refresh?force=1", { method: "POST" });
-  window.clearTimeout(state.timer);
+  window.clearTimeout(view.timer);
   pull();
 });
 for (const button of document.querySelectorAll("th button")) {
   button.addEventListener("click", () => {
     const sort = button.dataset.sort;
-    state.direction = state.sort === sort ? state.direction * -1 : 1;
-    state.sort = sort;
+    view.direction = view.sort === sort ? view.direction * -1 : sort === "symbol" ? 1 : -1;
+    view.sort = sort;
     render();
   });
 }

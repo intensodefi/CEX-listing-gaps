@@ -1,69 +1,101 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EXCHANGES } from "./exchanges.js";
-import { buildMatrix, filterGaps, isStablecoin, missingElsewhere, overlapStats } from "./compare.js";
+import { filterGaps, isStablecoin, missingElsewhere, overlapStats, comparisonState, buildMatrix } from "./compare.js";
+import { exchangesInRegion, EXCHANGES } from "./exchanges.js";
 
-const coins = [
-  { id: 1, rank: 1, symbol: "BTC", name: "Bitcoin", stable: false, exchanges: ["binance", "coinbase-exchange", "kraken"] },
-  { id: 2, rank: 2, symbol: "ETH", name: "Ethereum", stable: false, exchanges: ["binance", "coinbase-exchange"] },
-  { id: 3, rank: 3, symbol: "USDT", name: "Tether", stable: true, exchanges: ["binance"] },
-  { id: 4, rank: 81, symbol: "FLR", name: "Flare", stable: false, exchanges: ["coinbase-exchange", "kraken"] },
-  { id: 5, rank: 90, symbol: "PYTH", name: "Pyth Network", stable: false, exchanges: ["binance", "kraken"] },
-];
+const spot = {
+  binance: {
+    ok: true,
+    pairCount: 4,
+    assets: [
+      { id: 1, symbol: "BTC", name: "Bitcoin", stable: false, pairs: 2, quotes: ["USDT", "USD"] },
+      { id: 2, symbol: "ETH", name: "Ethereum", stable: false, pairs: 1, quotes: ["USDT"] },
+      { id: 825, symbol: "USDT", name: "Tether", stable: true, pairs: 1, quotes: ["USD"] },
+    ],
+  },
+  "coinbase-exchange": {
+    ok: true,
+    pairCount: 1,
+    assets: [
+      { id: 1, symbol: "BTC", name: "Bitcoin", stable: false, pairs: 1, quotes: ["USD"] },
+    ],
+  },
+  upbit: { ok: false, pairCount: 0, assets: [], error: "unavailable" },
+};
 
-test("stablecoin tag detection", () => {
-  assert.equal(isStablecoin(["mineable", "stablecoin"]), true);
-  assert.equal(isStablecoin(["layer-1"]), false);
-  assert.equal(isStablecoin(null), false);
+const perpetual = {
+  binance: {
+    ok: true,
+    pairCount: 1,
+    assets: [{ id: 9, symbol: "SOL", name: "Solana", stable: false, pairs: 1, quotes: ["USDT"] }],
+  },
+  "coinbase-exchange": { ok: true, pairCount: 0, assets: [] },
+};
+
+test("stablecoin symbols are recognized", () => {
+  assert.equal(isStablecoin({ symbol: "USDC" }), true);
+  assert.equal(isStablecoin({ symbol: "BTC", stable: false }), false);
 });
 
-test("gaps are listed on the first exchange and absent from the second", () => {
-  const gaps = filterGaps(coins, { present: "binance", absent: "coinbase-exchange" });
-  assert.deepEqual(gaps.map((coin) => coin.symbol), ["PYTH"]);
+test("spot gaps use every base asset from pairs, not a rank sample", () => {
+  const gaps = filterGaps(spot, { present: "binance", absent: "coinbase-exchange" });
+  assert.deepEqual(gaps.map((asset) => asset.symbol), ["ETH"]);
+});
+
+test("perpetual listings do not leak into spot gaps", () => {
+  const gaps = filterGaps(perpetual, { present: "binance", absent: "coinbase-exchange" });
+  assert.deepEqual(gaps.map((asset) => asset.symbol), ["SOL"]);
+  assert.deepEqual(filterGaps(spot, { present: "binance", absent: "coinbase-exchange" }).map((asset) => asset.symbol), ["ETH"]);
+});
+
+test("a failed exchange is not treated as an empty listing", () => {
+  assert.equal(comparisonState(spot, "binance", "upbit").ok, false);
+  assert.deepEqual(filterGaps(spot, { present: "binance", absent: "upbit" }), []);
 });
 
 test("stablecoins stay hidden unless requested", () => {
-  const hidden = filterGaps(coins, { present: "binance", absent: "kraken" });
-  assert.deepEqual(hidden.map((coin) => coin.symbol), ["ETH"]);
-  const shown = filterGaps(coins, { present: "binance", absent: "kraken", includeStable: true });
-  assert.deepEqual(shown.map((coin) => coin.symbol), ["ETH", "USDT"]);
+  const hidden = filterGaps(spot, { present: "binance", absent: "coinbase-exchange" });
+  assert.equal(hidden.some((asset) => asset.symbol === "USDT"), false);
+  const shown = filterGaps(spot, { present: "binance", absent: "coinbase-exchange", includeStable: true });
+  assert.deepEqual(shown.map((asset) => asset.symbol), ["ETH", "USDT"]);
 });
 
-test("search matches symbol or name", () => {
-  const bySymbol = filterGaps(coins, { present: "binance", absent: "coinbase-exchange", query: "py" });
-  assert.deepEqual(bySymbol.map((coin) => coin.symbol), ["PYTH"]);
-  const byName = filterGaps(coins, { present: "coinbase-exchange", absent: "binance", query: "flare" });
-  assert.deepEqual(byName.map((coin) => coin.symbol), ["FLR"]);
+test("region filter keeps one home market per exchange", () => {
+  assert.deepEqual(exchangesInRegion(EXCHANGES, "kr").map((exchange) => exchange.slug), [
+    "upbit", "bithumb", "coinone", "korbit", "gopax",
+  ]);
+  assert.deepEqual(exchangesInRegion(EXCHANGES, "us").map((exchange) => exchange.slug), [
+    "coinbase-exchange", "kraken", "gemini", "binance-us",
+  ]);
+  assert.equal(exchangesInRegion(EXCHANGES, "all").length, EXCHANGES.length);
 });
 
-test("overlap stats count both directions", () => {
-  const stats = overlapStats(coins, "binance", "coinbase-exchange");
-  assert.equal(stats.considered, 4);
-  assert.equal(stats.onPresent, 3);
-  assert.equal(stats.onBoth, 2);
+test("overlap counts pairs separately from assets", () => {
+  const stats = overlapStats(spot, "binance", "coinbase-exchange");
   assert.equal(stats.gap, 1);
-  assert.equal(stats.reverseGap, 1);
-  assert.equal(stats.coverage, 2 / 3);
+  assert.equal(stats.onBoth, 1);
+  assert.equal(stats.presentPairs, 4);
+  assert.equal(stats.coverage, 1 / 2);
 });
 
-test("matrix diagonal is coverage and off-diagonal is the gap", () => {
-  const exchanges = EXCHANGES.filter((exchange) =>
-    ["binance", "coinbase-exchange", "kraken"].includes(exchange.slug),
-  );
-  const matrix = buildMatrix(coins, exchanges);
+test("matrix skips exchanges whose pair fetch failed", () => {
+  const exchanges = [
+    { slug: "binance", name: "Binance", short: "BN" },
+    { slug: "coinbase-exchange", name: "Coinbase", short: "CB" },
+    { slug: "upbit", name: "Upbit", short: "UP" },
+  ];
+  const matrix = buildMatrix(spot, exchanges);
   const binance = matrix.rows.find((row) => row.slug === "binance");
-  const self = binance.cells.find((cell) => cell.slug === "binance");
-  const coinbase = binance.cells.find((cell) => cell.slug === "coinbase-exchange");
-  assert.equal(self.kind, "self");
-  assert.equal(self.count, 3);
-  assert.equal(coinbase.count, 1);
-  assert.equal(matrix.maxGap >= 1, true);
+  assert.equal(binance.cells.find((cell) => cell.slug === "coinbase-exchange").count, 1);
+  assert.equal(binance.cells.find((cell) => cell.slug === "upbit").kind, "missing");
 });
 
-test("missing elsewhere skips the selected exchange", () => {
-  const flare = coins.find((coin) => coin.symbol === "FLR");
-  const missing = missingElsewhere(flare, EXCHANGES, "binance");
-  assert.equal(missing.includes("BN"), false);
-  assert.equal(missing.includes("CB"), false);
-  assert.equal(missing.includes("OK"), true);
+test("missing elsewhere ignores the selected venue and failed venues", () => {
+  const exchanges = EXCHANGES.filter((exchange) => ["binance", "coinbase-exchange", "kraken"].includes(exchange.slug));
+  const book = {
+    ...spot,
+    kraken: { ok: true, pairCount: 0, assets: [] },
+  };
+  const missing = missingElsewhere(2, book, exchanges, "coinbase-exchange");
+  assert.deepEqual(missing, ["KR"]);
 });
