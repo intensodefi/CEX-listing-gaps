@@ -286,16 +286,25 @@ function showPopover(anchor, exchanges) {
     popover.append(item);
   }
   popover.hidden = false;
+  popover.style.maxHeight = "none";
   const rect = anchor.getBoundingClientRect();
-  const width = 260;
+  const width = 280;
+  const margin = 8;
   let left = rect.left;
-  if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
-  popover.style.left = `${Math.max(8, left)}px`;
+  if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
+  popover.style.left = `${Math.max(margin, left)}px`;
   popover.style.top = `${rect.bottom + 6}px`;
-  const popRect = popover.getBoundingClientRect();
-  if (popRect.bottom > window.innerHeight - 8) {
-    popover.style.top = `${Math.max(8, rect.top - popRect.height - 6)}px`;
+  const spaceBelow = window.innerHeight - rect.bottom - 12;
+  const spaceAbove = rect.top - 12;
+  const needed = popover.scrollHeight;
+  if (needed <= spaceBelow) return;
+  if (needed <= spaceAbove) {
+    popover.style.top = `${rect.top - needed - 6}px`;
+    return;
   }
+  const below = spaceBelow >= spaceAbove;
+  popover.style.maxHeight = `${Math.max(140, below ? spaceBelow : spaceAbove)}px`;
+  if (!below) popover.style.top = `${margin}px`;
 }
 
 function renderMissing(container, exchanges) {

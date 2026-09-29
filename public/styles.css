@@ -381,14 +381,18 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 260px;
-  max-height: 280px;
+  width: 280px;
   overflow: auto;
   padding: 8px;
   background: var(--paper-2);
   border: 1px solid var(--ink);
   box-shadow: 0 12px 28px rgba(27, 25, 20, 0.16);
+  scrollbar-color: var(--ink) var(--sand);
 }
+
+.ex-pop::-webkit-scrollbar { width: 10px; }
+.ex-pop::-webkit-scrollbar-track { background: var(--sand); }
+.ex-pop::-webkit-scrollbar-thumb { background: var(--ink); }
 
 .ex-pop[hidden] { display: none; }
 
