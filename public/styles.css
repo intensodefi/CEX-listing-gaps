@@ -378,12 +378,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .ex-pop {
   position: fixed;
   z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 280px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  width: min(520px, calc(100vw - 16px));
   overflow: auto;
-  padding: 8px;
+  padding: 8px 10px;
   background: var(--paper-2);
   border: 1px solid var(--ink);
   box-shadow: 0 12px 28px rgba(27, 25, 20, 0.16);

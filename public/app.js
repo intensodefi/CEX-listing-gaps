@@ -288,7 +288,7 @@ function showPopover(anchor, exchanges) {
   popover.hidden = false;
   popover.style.maxHeight = "none";
   const rect = anchor.getBoundingClientRect();
-  const width = 280;
+  const width = popover.offsetWidth || 520;
   const margin = 8;
   let left = rect.left;
   if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
