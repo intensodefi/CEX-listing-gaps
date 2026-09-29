@@ -792,10 +792,8 @@ document.addEventListener("pointerdown", (event) => {
   if (!event.target.closest(".ex-more") && !event.target.closest(".ex-pop")) hidePopover();
   if (!event.target.closest(".col-filter") && !event.target.closest(".filter-panel")) closeFilter();
 });
-window.addEventListener("scroll", (event) => {
+window.addEventListener("scroll", () => {
   hidePopover();
-  if (filterPanel.contains(event.target)) return;
-  closeFilter();
 }, true);
 queryInput.addEventListener("input", render);
 stableInput.addEventListener("change", render);
