@@ -1,8 +1,8 @@
-# CEX listing Gaps
+# CEX listing gaps
 
-Compares listings built from every market pair CoinMarketCap tracks. Each side of a comparison is one listing: an exchange's spot, perpetual, or dated futures book, or the same market combined across a country's exchanges. Binance perpetual can be compared with Binance spot. South Korea spot can be compared with United States spot.
+CEX Listing Gaps is a market-listing comparison tool built to make it easier to spot differences in crypto asset availability across centralized exchanges, markets, and regions.
 
-A coin counts as listed only when it is the base of at least one pair in that listing. A country listing is the union of its exchanges.
+The tool turns CoinMarketCap market-pair data into comparable listings and highlights assets that appear on one side of a comparison but not the other. This makes it useful for researching exchange coverage, discovering newly available assets, and identifying gaps between spot, perpetual, and futures markets.
 
 ## Use cases
 
