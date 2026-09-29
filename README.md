@@ -33,6 +33,8 @@ Open http://127.0.0.1:4173. Platform and tags each start with every value select
 
 Pair data is cached in `data/` for 7 days. Startup loads that cache and does not call CoinMarketCap again. Press Refresh to fetch new pairs.
 
+Click Refresh button to fetch data for the first time.
+
 The Refresh button stays in this repository. On Railway, `RAILWAY_ENVIRONMENT` is set, so that deployment removes the button and rejects `POST /api/refresh`. Set `DISABLE_REFRESH=0` in the Railway service to keep Refresh there. Set `DISABLE_REFRESH=1` to remove Refresh outside Railway.
 
 ## Test
