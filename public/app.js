@@ -152,7 +152,10 @@ function openSide(side, { resetQuery = true } = {}) {
   const other = otherSide(side);
   if (sides[other].open) closeSide(other);
   sides[side].open = true;
-  if (resetQuery) sides[side].query = "";
+  if (resetQuery) {
+    sides[side].query = "";
+    sides[side].dirty = false;
+  }
   const selected = visibleOptions(side).findIndex((option) => option.id === sides[side].value);
   sides[side].active = selected >= 0 ? selected : 0;
   const input = inputs[side];
