@@ -9,6 +9,7 @@ A coin counts as listed only when it is the base of at least one pair in that li
 - Spot: CoinMarketCap exchange market pairs. This API plan does not enable `/v1/exchange/market-pairs/latest`.
 - Perpetual and futures: [`/v5/exchange/derivatives/market-pairs/list/latest`](https://coinmarketcap.com/api/documentation/pro-api-reference/derivatives), with the key in `CMC_API_KEY`.
 - Names: `/v1/cryptocurrency/map`.
+- Tags and platform: `/v2/cryptocurrency/info`. A coin with no contract platform is shown as Native.
 
 ## Run
 
@@ -18,7 +19,7 @@ cp .env.example .env
 npm start
 ```
 
-Open http://127.0.0.1:4173.
+Open http://127.0.0.1:4173. Export CSV downloads the assets currently shown in the table.
 
 The first load walks every exchange and market, then caches the result in `data/` for 30 minutes.
 

@@ -292,6 +292,48 @@ input[type="search"] {
 
 .panel-head p { max-width: 640px; font-size: 14px; }
 
+.panel-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+th {
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.platform { display: grid; gap: 2px; }
+.platform b { font-weight: 650; font-size: 13px; }
+.platform small {
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px; }
+
+.tag {
+  padding: 2px 6px;
+  background: var(--sand);
+  color: var(--ink);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.ex-pop.is-tags {
+  width: min(480px, calc(100vw - 16px));
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px;
+}
+
+#export:disabled { opacity: 0.45; cursor: default; }
+
 .table-scroll { overflow-x: auto; }
 
 table {

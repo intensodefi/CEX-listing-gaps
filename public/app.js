@@ -1,5 +1,6 @@
 import { EXCHANGES } from "/shared/exchanges.js";
 import { comparisonState, filterGaps, missingExchanges, overlapStats } from "/shared/compare.js";
+import { platformLabel, tableToCsv } from "/shared/csv.js";
 import { listingOptions, resolveListings } from "/shared/venues.js";
 
 const OPTIONS = listingOptions();
@@ -18,6 +19,8 @@ const rowsEl = document.querySelector("#rows");
 const emptyEl = document.querySelector("#empty");
 const tableTitle = document.querySelector("#table-title");
 const tableNote = document.querySelector("#table-note");
+const exportButton = document.querySelector("#export");
+const TAG_LIMIT = 4;
 const popover = document.createElement("div");
 popover.className = "ex-pop";
 popover.hidden = true;
@@ -268,6 +271,7 @@ function exchangeLogo(exchange) {
 function hidePopover() {
   window.clearTimeout(hidePopoverTimer);
   popover.hidden = true;
+  popover.classList.remove("is-tags");
   popover.replaceChildren();
 }
 
@@ -276,18 +280,7 @@ function scheduleHidePopover() {
   hidePopoverTimer = window.setTimeout(hidePopover, 160);
 }
 
-function showPopover(anchor, exchanges) {
-  window.clearTimeout(hidePopoverTimer);
-  popover.replaceChildren();
-  for (const exchange of exchanges) {
-    const item = document.createElement("div");
-    item.className = "ex-pop-item";
-    const name = document.createElement("span");
-    name.className = "ex-pop-name";
-    name.textContent = exchange.label;
-    item.append(exchangeLogo(exchange), name);
-    popover.append(item);
-  }
+function placePopover(anchor) {
   popover.hidden = false;
   popover.style.maxHeight = "none";
   const rect = anchor.getBoundingClientRect();
@@ -308,6 +301,35 @@ function showPopover(anchor, exchanges) {
   const below = spaceBelow >= spaceAbove;
   popover.style.maxHeight = `${Math.max(140, below ? spaceBelow : spaceAbove)}px`;
   if (!below) popover.style.top = `${margin}px`;
+}
+
+function showPopover(anchor, exchanges) {
+  window.clearTimeout(hidePopoverTimer);
+  popover.classList.remove("is-tags");
+  popover.replaceChildren();
+  for (const exchange of exchanges) {
+    const item = document.createElement("div");
+    item.className = "ex-pop-item";
+    const name = document.createElement("span");
+    name.className = "ex-pop-name";
+    name.textContent = exchange.label;
+    item.append(exchangeLogo(exchange), name);
+    popover.append(item);
+  }
+  placePopover(anchor);
+}
+
+function showTags(anchor, tags) {
+  window.clearTimeout(hidePopoverTimer);
+  popover.classList.add("is-tags");
+  popover.replaceChildren();
+  for (const tag of tags) {
+    const chip = document.createElement("span");
+    chip.className = "tag";
+    chip.textContent = tag;
+    popover.append(chip);
+  }
+  placePopover(anchor);
 }
 
 function renderMissing(container, exchanges) {
@@ -337,6 +359,139 @@ function renderMissing(container, exchanges) {
   container.append(row);
 }
 
+function profileFor(id) {
+  return view.snapshot?.profiles?.[String(id)] || null;
+}
+
+function decorateEntry(entry) {
+  if (!entry?.ok) return entry;
+  return {
+    ...entry,
+    assets: (entry.assets || []).map((asset) => {
+      const tags = profileFor(asset.id)?.tags || [];
+      if (!tags.length) return asset;
+      return { ...asset, tags, stable: asset.stable || tags.includes("stablecoin") };
+    }),
+  };
+}
+
+function comparedBooks() {
+  const present = sides.present.value;
+  const absent = sides.absent.value;
+  const resolved = view.resolved || {};
+  return {
+    ...resolved,
+    [present]: decorateEntry(resolved[present]),
+    [absent]: decorateEntry(resolved[absent]),
+  };
+}
+
+function visibleGaps() {
+  const present = sides.present.value;
+  const absent = sides.absent.value;
+  const books = comparedBooks();
+  if (!comparisonState(books, present, absent).ok) return [];
+  const gaps = filterGaps(books, {
+    present,
+    absent,
+    query: queryInput.value,
+    includeStable: stableInput.checked,
+  });
+  return [...gaps].sort((a, b) => {
+    const left = a[view.sort];
+    const right = b[view.sort];
+    if (typeof left === "string") return left.localeCompare(right) * view.direction;
+    return ((left ?? 0) - (right ?? 0)) * view.direction;
+  });
+}
+
+function shortAddress(address) {
+  if (!address || address.length <= 14) return address || "";
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function renderPlatform(container, profile) {
+  container.replaceChildren();
+  if (!view.snapshot?.profilesReady) {
+    container.textContent = "…";
+    return;
+  }
+  const name = document.createElement("b");
+  name.textContent = profile ? platformLabel(profile) : "—";
+  container.append(name);
+  if (profile?.tokenAddress) {
+    const address = document.createElement("small");
+    address.title = profile.tokenAddress;
+    address.textContent = shortAddress(profile.tokenAddress);
+    container.append(address);
+  }
+}
+
+function renderTags(container, tags) {
+  container.replaceChildren();
+  if (!view.snapshot?.profilesReady) {
+    container.textContent = "…";
+    return;
+  }
+  if (!tags.length) {
+    container.textContent = "—";
+    return;
+  }
+  for (const tag of tags.slice(0, TAG_LIMIT)) {
+    const chip = document.createElement("span");
+    chip.className = "tag";
+    chip.textContent = tag;
+    container.append(chip);
+  }
+  const rest = tags.slice(TAG_LIMIT);
+  if (!rest.length) return;
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "ex-more";
+  more.textContent = `+${rest.length}`;
+  more.setAttribute("aria-label", `${rest.length} more tags`);
+  const open = () => showTags(more, tags);
+  more.addEventListener("mouseenter", open);
+  more.addEventListener("focus", open);
+  more.addEventListener("mouseleave", scheduleHidePopover);
+  more.addEventListener("blur", scheduleHidePopover);
+  container.append(more);
+}
+
+function exportName() {
+  const raw = `${optionName(sides.present.value)}-vs-${optionName(sides.absent.value)}`;
+  return `${raw.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "")}.csv`;
+}
+
+function exportCsv() {
+  const present = sides.present.value;
+  const absent = sides.absent.value;
+  const rows = visibleGaps().map((asset) => {
+    const profile = profileFor(asset.id);
+    return {
+      symbol: asset.symbol,
+      name: asset.name || "",
+      id: asset.id,
+      slug: asset.slug || "",
+      pairs: asset.pairs || 0,
+      quotes: asset.quotes || [],
+      tags: profile?.tags || [],
+      platform: platformLabel(profile),
+      tokenAddress: profile?.tokenAddress || "",
+      missing: missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present).map((exchange) => exchange.label),
+    };
+  });
+  const blob = new Blob([`\uFEFF${tableToCsv(rows)}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = exportName();
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function render() {
   hidePopover();
   renderStatus();
@@ -344,8 +499,9 @@ function render() {
   syncComboText();
   const present = sides.present.value;
   const absent = sides.absent.value;
-  const state = comparisonState(view.resolved, present, absent);
-  const stats = state.ok ? overlapStats(view.resolved, present, absent, stableInput.checked) : null;
+  const books = comparedBooks();
+  const state = comparisonState(books, present, absent);
+  const stats = state.ok ? overlapStats(books, present, absent, stableInput.checked) : null;
 
   statsEl.replaceChildren();
   const cards = stats
@@ -373,24 +529,15 @@ function render() {
     : state.ok
       ? `On ${optionName(present)}, not on ${optionName(absent)}`
       : state.message;
-  tableNote.textContent = state.ok
-    ? "Same exchange, different markets, and country groups are all valid sides."
-    : "";
+  const profilesReady = view.snapshot?.profilesReady === true;
+  tableNote.textContent = !state.ok
+    ? ""
+    : profilesReady
+      ? "Tags and platform come from CoinMarketCap. Export CSV uses this table."
+      : `Loading tags and platforms${view.snapshot?.profileTotal ? ` (${formatCount(view.snapshot.profileDone)}/${formatCount(view.snapshot.profileTotal)})` : ""}.`;
+  exportButton.disabled = !state.ok || !profilesReady;
 
-  let gaps = state.ok
-    ? filterGaps(view.resolved, {
-        present,
-        absent,
-        query: queryInput.value,
-        includeStable: stableInput.checked,
-      })
-    : [];
-  gaps = [...gaps].sort((a, b) => {
-    const left = a[view.sort];
-    const right = b[view.sort];
-    if (typeof left === "string") return left.localeCompare(right) * view.direction;
-    return ((left ?? 0) - (right ?? 0)) * view.direction;
-  });
+  const gaps = state.ok ? visibleGaps() : [];
 
   rowsEl.replaceChildren();
   emptyEl.hidden = gaps.length > 0 || loading || !state.ok;
@@ -413,6 +560,8 @@ function render() {
       </td>
       <td class="num">${escapeHtml(formatCount(asset.pairs))}</td>
       <td class="quotes"></td>
+      <td class="platform"></td>
+      <td class="tags"></td>
       <td class="missing"></td>
     `;
     const link = tr.querySelector("a");
@@ -430,6 +579,9 @@ function render() {
     tr.querySelector(".quotes").textContent = extra > 0
       ? `${shownQuotes.join(" · ")} +${extra}`
       : shownQuotes.join(" · ");
+    const profile = profileFor(asset.id);
+    renderPlatform(tr.querySelector(".platform"), profile);
+    renderTags(tr.querySelector(".tags"), profile?.tags || []);
     renderMissing(
       tr.querySelector(".missing"),
       missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present),
@@ -442,9 +594,9 @@ async function pull() {
   const response = await fetch("/api/snapshot");
   view.snapshot = await response.json();
   render();
-  if (!view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle") {
-    view.timer = window.setTimeout(pull, 700);
-  }
+  const phase = view.snapshot?.phase;
+  const waiting = !view.snapshot || phase === "loading" || phase === "idle" || view.snapshot.profilesReady === false;
+  if (waiting) view.timer = window.setTimeout(pull, 700);
 }
 
 for (const side of ["present", "absent"]) {
@@ -494,6 +646,7 @@ document.addEventListener("pointerdown", (event) => {
 window.addEventListener("scroll", hidePopover, true);
 queryInput.addEventListener("input", render);
 stableInput.addEventListener("change", render);
+exportButton.addEventListener("click", exportCsv);
 document.querySelector("#swap").addEventListener("click", () => {
   const next = sides.present.value;
   sides.present.value = sides.absent.value;

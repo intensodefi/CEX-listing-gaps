@@ -2,7 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getState, loadFreshCache, refreshSnapshot } from "./cmc.js";
+import { ensureProfiles, getState, loadFreshCache, refreshSnapshot } from "./cmc.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -123,6 +123,9 @@ server.listen(PORT, "0.0.0.0", () => {
   }
   if (loadFreshCache()) {
     console.log(`Loaded cached snapshot from ${getState().updatedAt}`);
+    ensureProfiles().catch((error) => {
+      console.error("Asset info failed:", error.message);
+    });
     return;
   }
   refreshSnapshot()

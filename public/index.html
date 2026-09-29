@@ -59,7 +59,10 @@
     <section class="panel">
       <div class="panel-head">
         <h2 id="table-title">Assets</h2>
-        <p id="table-note"></p>
+        <div class="panel-actions">
+          <p id="table-note"></p>
+          <button type="button" id="export" class="text-button">Export CSV</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table>
@@ -68,6 +71,8 @@
               <th><button type="button" data-sort="symbol">Asset</button></th>
               <th><button type="button" data-sort="pairs">Pairs</button></th>
               <th>Quotes</th>
+              <th>Platform</th>
+              <th>Tags</th>
               <th>Also missing from</th>
             </tr>
           </thead>

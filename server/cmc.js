@@ -16,6 +16,10 @@ const state = {
   updatedAt: null,
   books: emptyBooks(),
   failures: [],
+  profiles: {},
+  profilesReady: false,
+  profileDone: 0,
+  profileTotal: 0,
   cooldownUntil: 0,
 };
 
@@ -50,6 +54,10 @@ export function getState() {
     exchanges: EXCHANGES,
     markets: MARKETS,
     books: state.books,
+    profiles: state.profiles,
+    profilesReady: state.profilesReady,
+    profileDone: state.profileDone,
+    profileTotal: state.profileTotal,
   };
 }
 
@@ -219,7 +227,6 @@ function readCache() {
   try {
     const parsed = JSON.parse(fs.readFileSync(cachePath(), "utf8"));
     if (!parsed || parsed.version !== CACHE_VERSION || !parsed.books) return null;
-    if (Date.now() - Date.parse(parsed.updatedAt) > cacheTtl()) return null;
     return parsed;
   } catch {
     return null;
@@ -234,6 +241,7 @@ function writeCache() {
     updatedAt: state.updatedAt,
     books: state.books,
     failures: state.failures,
+    profiles: state.profiles,
   }));
 }
 
@@ -243,10 +251,17 @@ export function loadFreshCache() {
   state.phase = "ready";
   state.books = cached.books;
   state.failures = cached.failures || [];
+  state.profiles = cached.profiles || {};
   state.updatedAt = cached.updatedAt;
   state.done = state.total;
   state.detail = "";
   state.error = null;
+  state.profilesReady = profilesCover(state.books, state.profiles);
+  state.profileTotal = collectIds(state.books).length;
+  state.profileDone = state.profilesReady ? state.profileTotal : Object.keys(state.profiles).length;
+  if (Date.now() - Date.parse(cached.updatedAt) > cacheTtl()) {
+    console.log("Cached pair data is older than CACHE_TTL_MS. Press Refresh to fetch pairs again.");
+  }
   return true;
 }
 
@@ -291,8 +306,108 @@ async function refreshUncached() {
   state.detail = "";
   state.phase = "ready";
   state.cooldownUntil = Date.now() + 180_000;
+  await fetchProfiles();
   writeCache();
   return getState();
+}
+
+function collectIds(books) {
+  const ids = new Set();
+  for (const market of Object.values(books || {})) {
+    for (const entry of Object.values(market || {})) {
+      for (const asset of entry?.assets || []) {
+        if (asset?.id) ids.add(asset.id);
+      }
+    }
+  }
+  return [...ids];
+}
+
+function profilesCover(books, profiles) {
+  return collectIds(books).every((id) => profiles?.[String(id)]);
+}
+
+function emptyProfile() {
+  return { tags: [], platform: null, platformSymbol: null, tokenAddress: null };
+}
+
+function normalizeProfile(coin) {
+  const platform = coin?.platform || null;
+  const tags = Array.isArray(coin?.tags) ? coin.tags.filter((tag) => typeof tag === "string" && tag) : [];
+  return {
+    tags,
+    platform: platform?.name || null,
+    platformSymbol: platform?.symbol || null,
+    tokenAddress: platform?.token_address || null,
+  };
+}
+
+async function fetchInfoBatch(ids) {
+  const url = new URL("/v2/cryptocurrency/info", PRO_BASE);
+  url.searchParams.set("id", ids.join(","));
+  return readJson(url, { pro: true });
+}
+
+async function storeInfoBatch(profiles, ids) {
+  if (!ids.length) return;
+  try {
+    const data = await fetchInfoBatch(ids);
+    for (const id of ids) {
+      const coin = data?.[id] || data?.[String(id)];
+      profiles[String(id)] = coin ? normalizeProfile(coin) : emptyProfile();
+    }
+  } catch (error) {
+    if (ids.length === 1) {
+      profiles[String(ids[0])] = emptyProfile();
+      console.error(`Asset info failed for ${ids[0]}: ${error.message}`);
+      return;
+    }
+    const mid = Math.ceil(ids.length / 2);
+    await storeInfoBatch(profiles, ids.slice(0, mid));
+    await storeInfoBatch(profiles, ids.slice(mid));
+  }
+}
+
+let profilePromise = null;
+
+async function fetchProfiles() {
+  const ids = collectIds(state.books);
+  const profiles = { ...(state.profiles || {}) };
+  const missing = ids.filter((id) => !profiles[String(id)]);
+  state.profileTotal = ids.length;
+  state.profileDone = ids.length - missing.length;
+  if (!missing.length) {
+    state.profiles = profiles;
+    state.profilesReady = true;
+    return;
+  }
+  state.profilesReady = false;
+  for (let index = 0; index < missing.length; index += 100) {
+    const batch = missing.slice(index, index + 100);
+    await storeInfoBatch(profiles, batch);
+    state.profiles = { ...profiles };
+    state.profileDone = Math.min(ids.length, state.profileDone + batch.length);
+    console.log(`Asset info ${state.profileDone}/${state.profileTotal}`);
+  }
+  state.profiles = profiles;
+  state.profilesReady = profilesCover(state.books, profiles);
+}
+
+export function ensureProfiles() {
+  if (state.profilesReady && profilesCover(state.books, state.profiles)) {
+    return Promise.resolve(getState());
+  }
+  if (profilePromise) return profilePromise;
+  profilePromise = fetchProfiles()
+    .then(() => {
+      writeCache();
+      console.log(`Asset tags ready: ${state.profileDone}/${state.profileTotal}`);
+      return getState();
+    })
+    .finally(() => {
+      profilePromise = null;
+    });
+  return profilePromise;
 }
 
 export function refreshSnapshot({ force = false } = {}) {
