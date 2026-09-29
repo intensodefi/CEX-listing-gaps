@@ -1,4 +1,4 @@
-# CMC listing dashboard
+# CEX listing Gaps
 
 Compares listings built from every market pair CoinMarketCap tracks. Each side of a comparison is one listing: an exchange's spot, perpetual, or dated futures book, or the same market combined across a country's exchanges. Binance perpetual can be compared with Binance spot. South Korea spot can be compared with United States spot.
 
