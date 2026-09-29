@@ -19,7 +19,7 @@ cp .env.example .env
 npm start
 ```
 
-Open http://127.0.0.1:4173. The platform and also-missing columns can be filtered by checking values. Every tag starts selected; uncheck a tag to hide assets that have it. Export CSV downloads the assets currently shown in the table, including the contract address.
+Open http://127.0.0.1:4173. Platform, tags, and also-missing each start with every value selected. Uncheck a value to hide assets that match it. Export CSV downloads the assets currently shown in the table, including the contract address.
 
 The first load walks every exchange and market, then caches the result in `data/` for 30 minutes.
 

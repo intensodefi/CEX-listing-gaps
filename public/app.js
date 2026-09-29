@@ -50,6 +50,11 @@ const view = {
 };
 
 const FILTER_LABELS = { platform: "Platform", tag: "Tags", missing: "Also missing from" };
+const FILTER_HINTS = {
+  platform: "Every platform starts selected. Uncheck one to hide assets on it.",
+  tag: "Every tag starts selected. Uncheck one to hide assets that have it.",
+  missing: "Every exchange starts selected. Uncheck one to hide assets missing from it.",
+};
 const filterPanel = document.querySelector("#filter-panel");
 const filterTitle = document.querySelector("#filter-title");
 const filterSearch = document.querySelector("#filter-search");
@@ -456,19 +461,16 @@ function paintFilterOptions() {
     filterOptions.append(empty);
     return;
   }
-  const picked = new Set(view.filters[key]);
-  const exclude = key === "tag";
+  const excluded = new Set(view.filters[key]);
   for (const [value, count] of choices) {
     const label = document.createElement("label");
     label.className = "filter-option";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = exclude ? !picked.has(value) : picked.has(value);
+    input.checked = !excluded.has(value);
     input.addEventListener("change", () => {
-      const current = view.filters[key];
-      const without = current.filter((item) => item !== value);
-      const include = input.checked !== exclude;
-      view.filters[key] = include ? [...without, value] : without;
+      const without = view.filters[key].filter((item) => item !== value);
+      view.filters[key] = input.checked ? without : [...without, value];
       render();
     });
     const name = document.createElement("span");
@@ -501,7 +503,8 @@ function openFilter(key, anchor) {
   view.filterQuery = "";
   filterSearch.value = "";
   filterTitle.textContent = FILTER_LABELS[key];
-  filterHint.hidden = key !== "tag";
+  filterHint.textContent = FILTER_HINTS[key];
+  filterHint.hidden = false;
   paintFilterOptions();
   placeFilter(anchor);
   filterSearch.focus();

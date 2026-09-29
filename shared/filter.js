@@ -3,12 +3,12 @@ export function columnFiltersActive(filters = {}) {
 }
 
 export function matchesColumnFilters(row, filters = {}) {
-  const platform = filters.platform || [];
+  const excludedPlatforms = filters.platform || [];
   const excludedTags = filters.tag || [];
-  const missing = filters.missing || [];
-  if (platform.length && !platform.includes(row.platform)) return false;
-  // An empty tag list means every tag stays selected. A listed tag is hidden.
+  const excludedMissing = filters.missing || [];
+  // An empty list means every value stays selected. A listed value is hidden.
+  if (excludedPlatforms.includes(row.platform)) return false;
   if (excludedTags.some((tag) => (row.tags || []).includes(tag))) return false;
-  if (missing.length && !missing.some((label) => (row.missing || []).includes(label))) return false;
+  if (excludedMissing.some((label) => (row.missing || []).includes(label))) return false;
   return true;
 }
