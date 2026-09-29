@@ -21,7 +21,7 @@ npm start
 
 Open http://127.0.0.1:4173. Platform, tags, and also-missing each start with every value selected. Select all checks every value again, and deselect all clears the checks. With one value checked, only matching rows stay. Export CSV downloads the assets currently shown in the table, including the contract address.
 
-The first load walks every exchange and market, then caches the result in `data/` for 30 minutes.
+Pair data is cached in `data/` for 7 days. Startup loads that cache and does not call CoinMarketCap again. Press Refresh to fetch new pairs.
 
 ## Test
 

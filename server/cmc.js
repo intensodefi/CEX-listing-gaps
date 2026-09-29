@@ -37,9 +37,11 @@ function cachePath() {
   return path.join(process.cwd(), "data", "snapshot.json");
 }
 
+const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 function cacheTtl() {
-  const parsed = Number(process.env.CACHE_TTL_MS || 30 * 60 * 1000);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30 * 60 * 1000;
+  const parsed = Number(process.env.CACHE_TTL_MS || DEFAULT_CACHE_TTL_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CACHE_TTL_MS;
 }
 
 export function getState() {
@@ -58,6 +60,7 @@ export function getState() {
     profilesReady: state.profilesReady,
     profileDone: state.profileDone,
     profileTotal: state.profileTotal,
+    stale: Boolean(state.updatedAt) && Date.now() - Date.parse(state.updatedAt) > cacheTtl(),
   };
 }
 
@@ -260,7 +263,7 @@ export function loadFreshCache() {
   state.profileTotal = collectIds(state.books).length;
   state.profileDone = state.profilesReady ? state.profileTotal : Object.keys(state.profiles).length;
   if (Date.now() - Date.parse(cached.updatedAt) > cacheTtl()) {
-    console.log("Cached pair data is older than CACHE_TTL_MS. Press Refresh to fetch pairs again.");
+    console.log("Cached pair data is older than 7 days. Press Refresh to fetch pairs again.");
   }
   return true;
 }

@@ -122,18 +122,11 @@ server.listen(PORT, "0.0.0.0", () => {
     return;
   }
   if (loadFreshCache()) {
-    console.log(`Loaded cached snapshot from ${getState().updatedAt}`);
+    console.log(`Loaded cached snapshot from ${getState().updatedAt}. New pairs are fetched only when Refresh is pressed.`);
     ensureProfiles().catch((error) => {
       console.error("Asset info failed:", error.message);
     });
     return;
   }
-  refreshSnapshot()
-    .then((snapshot) => {
-      const feeds = Object.values(snapshot.books).reduce((sum, book) => sum + Object.keys(book).length, 0);
-      console.log(`Snapshot ready: ${feeds} exchange markets, ${snapshot.failures.length} failed`);
-    })
-    .catch((error) => {
-      console.error("Initial refresh failed:", error.message);
-    });
+  console.log("No cached snapshot. Press Refresh to fetch pairs.");
 });

@@ -254,7 +254,12 @@ function renderStatus() {
     statusLine.textContent = "Contacting the server";
     return;
   }
-  if (snapshot.phase === "loading" || snapshot.phase === "idle") {
+  if (snapshot.phase === "idle") {
+    statusLine.textContent = "Press Refresh to fetch pairs";
+    lede.textContent = "Pair data stays cached for 7 days. New pairs are fetched only when you press Refresh.";
+    return;
+  }
+  if (snapshot.phase === "loading") {
     const pct = snapshot.total ? Math.round((snapshot.done / snapshot.total) * 100) : 0;
     statusLine.textContent = snapshot.detail
       ? `Reading ${snapshot.detail} (${snapshot.done}/${snapshot.total})`
@@ -268,7 +273,8 @@ function renderStatus() {
   }
   const when = snapshot.updatedAt ? new Date(snapshot.updatedAt).toLocaleString() : "just now";
   const skipped = snapshot.failures?.length ? ` · ${snapshot.failures.length} feeds failed` : "";
-  statusLine.textContent = `Updated ${when}${skipped}`;
+  const stale = snapshot.stale ? " · older than 7 days, press Refresh to fetch again" : "";
+  statusLine.textContent = `Updated ${when}${skipped}${stale}`;
   lede.textContent = "Each side can be an exchange market or a country group. Spot, perpetual, and dated futures stay separate.";
 }
 
