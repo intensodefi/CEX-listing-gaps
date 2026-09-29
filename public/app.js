@@ -29,8 +29,8 @@ const lists = {
   absent: document.querySelector("#absent-list"),
 };
 const sides = {
-  present: { value: PRESENT_DEFAULT, open: false, active: 0, query: "" },
-  absent: { value: ABSENT_DEFAULT, open: false, active: 0, query: "" },
+  present: { value: PRESENT_DEFAULT, open: false, active: 0, query: "", dirty: false },
+  absent: { value: ABSENT_DEFAULT, open: false, active: 0, query: "", dirty: false },
 };
 
 const view = {
@@ -98,6 +98,7 @@ function closeSide(side, restore = true) {
   input.closest(".combo").classList.remove("open");
   list.hidden = true;
   list.replaceChildren();
+  sides[side].dirty = false;
   if (restore && document.activeElement !== input) input.value = listingLabel(sides[side].value);
 }
 
@@ -435,9 +436,17 @@ for (const side of ["present", "absent"]) {
   const input = inputs[side];
   input.addEventListener("focus", () => {
     openSide(side);
-    input.select();
+    window.requestAnimationFrame(() => input.select());
   });
   input.addEventListener("input", () => {
+    if (!sides[side].dirty) {
+      const label = listingLabel(sides[side].value);
+      let raw = input.value;
+      if (label && raw.startsWith(label)) raw = raw.slice(label.length).trim();
+      else if (label && raw.endsWith(label) && raw !== label) raw = raw.slice(0, raw.length - label.length).trim();
+      if (raw !== input.value) input.value = raw;
+      sides[side].dirty = true;
+    }
     sides[side].query = input.value;
     sides[side].active = 0;
     if (!sides[side].open) openSide(side, { resetQuery: false });
