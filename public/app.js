@@ -1,5 +1,5 @@
 import { EXCHANGES, REGIONS } from "/shared/exchanges.js";
-import { comparisonState, filterGaps, missingExchanges, overlapStats } from "/shared/compare.js";
+import { comparisonState, filterGaps, overlapStats } from "/shared/compare.js";
 import { platformLabel, tableToCsv } from "/shared/csv.js";
 import { columnFiltersActive, matchesColumnFilters } from "/shared/filter.js";
 import { listingOptions, resolveListings } from "/shared/venues.js";
@@ -7,8 +7,6 @@ import { listingOptions, resolveListings } from "/shared/venues.js";
 const OPTIONS = listingOptions();
 const PRESENT_DEFAULT = "ex:binance:perpetual";
 const ABSENT_DEFAULT = "ex:binance:spot";
-const LOGO_LIMIT = 3;
-
 const presentInput = document.querySelector("#present");
 const absentInput = document.querySelector("#absent");
 const queryInput = document.querySelector("#query");
@@ -47,18 +45,16 @@ const view = {
   filters: {
     platform: { mode: "all", values: [] },
     tag: { mode: "all", values: [] },
-    missing: { mode: "all", values: [] },
   },
   filterKey: "",
   filterQuery: "",
   described: [],
 };
 
-const FILTER_LABELS = { platform: "Platform", tag: "Tags", missing: "Also missing from" };
+const FILTER_LABELS = { platform: "Platform", tag: "Tags" };
 const FILTER_HINTS = {
   platform: "All platforms start selected. With one checked, only that chain stays.",
   tag: "All tags start selected. With one checked, only assets with that tag stay.",
-  missing: "All exchanges start selected. With one checked, only assets missing from it stay.",
 };
 const filterPanel = document.querySelector("#filter-panel");
 const filterTitle = document.querySelector("#filter-title");
@@ -350,22 +346,6 @@ function placePopover(anchor) {
   if (!below) popover.style.top = `${margin}px`;
 }
 
-function showPopover(anchor, exchanges) {
-  window.clearTimeout(hidePopoverTimer);
-  popover.classList.remove("is-tags");
-  popover.replaceChildren();
-  for (const exchange of exchanges) {
-    const item = document.createElement("div");
-    item.className = "ex-pop-item";
-    const name = document.createElement("span");
-    name.className = "ex-pop-name";
-    name.textContent = exchange.label;
-    item.append(exchangeLogo(exchange), name);
-    popover.append(item);
-  }
-  placePopover(anchor);
-}
-
 function showTags(anchor, tags) {
   window.clearTimeout(hidePopoverTimer);
   popover.classList.add("is-tags");
@@ -377,33 +357,6 @@ function showTags(anchor, tags) {
     popover.append(chip);
   }
   placePopover(anchor);
-}
-
-function renderMissing(container, exchanges) {
-  container.replaceChildren();
-  if (!exchanges.length) {
-    container.textContent = "—";
-    return;
-  }
-  const shown = exchanges.slice(0, LOGO_LIMIT);
-  const rest = exchanges.slice(LOGO_LIMIT);
-  const row = document.createElement("div");
-  row.className = "ex-logos";
-  for (const exchange of shown) row.append(exchangeLogo(exchange));
-  if (rest.length) {
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "ex-more";
-    more.textContent = `+${rest.length}`;
-    more.setAttribute("aria-label", `${rest.length} more exchanges`);
-    const open = () => showPopover(more, rest);
-    more.addEventListener("mouseenter", open);
-    more.addEventListener("focus", open);
-    more.addEventListener("mouseleave", scheduleHidePopover);
-    more.addEventListener("blur", scheduleHidePopover);
-    row.append(more);
-  }
-  container.append(row);
 }
 
 function profileFor(id) {
@@ -437,7 +390,6 @@ function freshFilters() {
   return {
     platform: { mode: "all", values: [] },
     tag: { mode: "all", values: [] },
-    missing: { mode: "all", values: [] },
   };
 }
 
@@ -447,17 +399,12 @@ function clearColumnFilters() {
 }
 
 function describedGaps() {
-  const present = sides.present.value;
-  const absent = sides.absent.value;
   return visibleGaps().map((asset) => {
     const profile = profileFor(asset.id);
-    const exchanges = missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present);
     return {
       asset,
       platform: profile ? platformLabel(profile) : "",
       tags: profile?.tags || [],
-      missing: exchanges.map((exchange) => exchange.label),
-      exchanges,
     };
   });
 }
@@ -474,7 +421,7 @@ function filterUniverse(key) {
   }));
   const counts = new Map();
   for (const row of narrowed) {
-    const values = key === "platform" ? [row.platform] : row[key === "tag" ? "tags" : "missing"];
+    const values = key === "platform" ? [row.platform] : row.tags || [];
     for (const value of values) {
       if (!value) continue;
       counts.set(value, (counts.get(value) || 0) + 1);
@@ -590,7 +537,7 @@ function syncFilterButtons() {
     const badge = button.querySelector(".filter-count");
     badge.hidden = !active;
     badge.textContent = String(count);
-    button.disabled = key !== "missing" && !profilesReady;
+    button.disabled = !profilesReady;
   }
 }
 
@@ -683,7 +630,6 @@ function exportCsv() {
       tags: row.tags,
       platform: row.platform,
       tokenAddress: profile?.tokenAddress || "",
-      missing: row.missing,
     };
   });
   const blob = new Blob([`\uFEFF${tableToCsv(rows)}`], { type: "text/csv;charset=utf-8" });
@@ -821,7 +767,6 @@ function render() {
       <td class="quotes"></td>
       <td class="platform-cell"></td>
       <td class="tags-cell"></td>
-      <td class="missing"></td>
     `;
     const link = tr.querySelector("a");
     link.textContent = asset.symbol;
@@ -841,7 +786,6 @@ function render() {
     const profile = profileFor(asset.id);
     renderPlatform(tr.querySelector(".platform-cell"), profile);
     renderTags(tr.querySelector(".tags-cell"), row.tags);
-    renderMissing(tr.querySelector(".missing"), row.exchanges);
     rowsEl.append(tr);
   }
 }

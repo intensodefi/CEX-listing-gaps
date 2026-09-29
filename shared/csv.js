@@ -8,7 +8,6 @@ const COLUMNS = [
   ["tags", "tags"],
   ["platform", "platform"],
   ["token_address", "tokenAddress"],
-  ["also_missing_from", "missing"],
 ];
 
 export function platformLabel(profile) {

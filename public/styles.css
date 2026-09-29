@@ -546,13 +546,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .up { color: var(--pine); }
 .down { color: var(--rust); }
 
-.ex-logos {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 28px;
-}
-
 .ex-logo {
   width: 26px;
   height: 26px;
@@ -598,19 +591,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .ex-pop::-webkit-scrollbar-thumb { background: var(--ink); }
 
 .ex-pop[hidden] { display: none; }
-
-.ex-pop-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--ink);
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.ex-pop-name { min-width: 0; white-space: normal; }
 
 .empty {
   padding: 18px 0 6px;

@@ -6,7 +6,7 @@ function selectionMatches(selection, values) {
 }
 
 export function columnFiltersActive(filters = {}) {
-  return ["platform", "tag", "missing"].some((key) => {
+  return ["platform", "tag"].some((key) => {
     const selection = filters[key];
     return Boolean(selection && selection.mode && selection.mode !== "all");
   });
@@ -16,6 +16,5 @@ export function matchesColumnFilters(row, filters = {}) {
   const platform = row.platform ? [row.platform] : [];
   if (!selectionMatches(filters.platform, platform)) return false;
   if (!selectionMatches(filters.tag, row.tags || [])) return false;
-  if (!selectionMatches(filters.missing, row.missing || [])) return false;
   return true;
 }

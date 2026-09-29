@@ -12,7 +12,6 @@ By using this tool, you can discover promising projects that are already listed 
 - **One exchange against another.** Compare Coinbase spot with Kraken spot to see which bases one book lists and the other does not.
 - **One country against another.** Compare South Korea spot with United States spot. A coin is on a country when at least one of that country's exchanges lists it. With a country selected, the page lists the member exchanges: Coinbase, Kraken, Gemini, and Binance.US for the United States; Upbit, Bithumb, Coinone, Korbit, and GOPAX for South Korea; bitFlyer, Bitbank, and Coincheck for Japan; Bitstamp and Bitvavo for Europe; Binance, Bybit, OKX, KuCoin, Gate, Bitget, MEXC, HTX, and Crypto.com for Global.
 - **A country against one exchange.** Compare Japan spot with Binance spot to see assets listed on a Japanese exchange and absent from Binance spot.
-- **The same gap on other books.** Also missing from shows which other listings lack each asset. Check one exchange in that column to keep rows missing from that exchange.
 - **A chain, a tag, or a handoff.** Check one platform, such as Ethereum, or one tag. The table keeps rows that match. Export CSV downloads the rows on screen, including tags, platform, and contract address. Stablecoins stay out of the table until Include stablecoins is checked.
 
 ## Data
@@ -30,7 +29,7 @@ cp .env.example .env
 npm start
 ```
 
-Open http://127.0.0.1:4173. Platform, tags, and also-missing each start with every value selected. Select all checks every value again, and deselect all clears the checks. With one value checked, only matching rows stay. Export CSV downloads the assets currently shown in the table, including the contract address.
+Open http://127.0.0.1:4173. Platform and tags each start with every value selected. Select all checks every value again, and deselect all clears the checks. With one value checked, only matching rows stay. Export CSV downloads the assets currently shown in the table, including the contract address.
 
 Pair data is cached in `data/` for 7 days. Startup loads that cache and does not call CoinMarketCap again. Press Refresh to fetch new pairs.
 
