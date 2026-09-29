@@ -282,7 +282,10 @@ function showPopover(anchor, exchanges) {
   for (const exchange of exchanges) {
     const item = document.createElement("div");
     item.className = "ex-pop-item";
-    item.append(exchangeLogo(exchange), document.createTextNode(exchange.label));
+    const name = document.createElement("span");
+    name.className = "ex-pop-name";
+    name.textContent = exchange.label;
+    item.append(exchangeLogo(exchange), name);
     popover.append(item);
   }
   popover.hidden = false;
