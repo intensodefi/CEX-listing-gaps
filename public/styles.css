@@ -306,12 +306,13 @@ th {
   font-weight: 500;
 }
 
-.platform { display: grid; gap: 2px; }
-.platform b { font-weight: 650; font-size: 13px; }
+.platform { display: grid; gap: 2px; min-width: 120px; }
+.platform b { font-weight: 650; font-size: 13px; white-space: nowrap; }
 .platform small {
   color: var(--muted);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px; }
@@ -339,7 +340,7 @@ th {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 1080px;
 }
 
 th, td {
