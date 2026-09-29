@@ -306,14 +306,8 @@ th {
   font-weight: 500;
 }
 
-.platform { display: grid; gap: 2px; min-width: 120px; }
+.platform { min-width: 88px; }
 .platform b { font-weight: 650; font-size: 13px; white-space: nowrap; }
-.platform small {
-  color: var(--muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 11px;
-  white-space: nowrap;
-}
 
 .tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 280px; }
 
@@ -420,6 +414,12 @@ th .col-filter:disabled { opacity: 0.35; cursor: default; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.filter-hint {
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.4;
 }
 
 .filter-panel input[type="search"] { height: 36px; }

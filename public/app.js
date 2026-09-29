@@ -53,6 +53,7 @@ const FILTER_LABELS = { platform: "Platform", tag: "Tags", missing: "Also missin
 const filterPanel = document.querySelector("#filter-panel");
 const filterTitle = document.querySelector("#filter-title");
 const filterSearch = document.querySelector("#filter-search");
+const filterHint = document.querySelector("#filter-hint");
 const filterOptions = document.querySelector("#filter-options");
 
 let hidePopoverTimer = 0;
@@ -455,16 +456,19 @@ function paintFilterOptions() {
     filterOptions.append(empty);
     return;
   }
-  const selected = new Set(view.filters[key]);
+  const picked = new Set(view.filters[key]);
+  const exclude = key === "tag";
   for (const [value, count] of choices) {
     const label = document.createElement("label");
     label.className = "filter-option";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = selected.has(value);
+    input.checked = exclude ? !picked.has(value) : picked.has(value);
     input.addEventListener("change", () => {
       const current = view.filters[key];
-      view.filters[key] = input.checked ? [...current, value] : current.filter((item) => item !== value);
+      const without = current.filter((item) => item !== value);
+      const include = input.checked !== exclude;
+      view.filters[key] = include ? [...without, value] : without;
       render();
     });
     const name = document.createElement("span");
@@ -497,6 +501,7 @@ function openFilter(key, anchor) {
   view.filterQuery = "";
   filterSearch.value = "";
   filterTitle.textContent = FILTER_LABELS[key];
+  filterHint.hidden = key !== "tag";
   paintFilterOptions();
   placeFilter(anchor);
   filterSearch.focus();
@@ -541,11 +546,6 @@ function visibleGaps() {
   });
 }
 
-function shortAddress(address) {
-  if (!address || address.length <= 14) return address || "";
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
-
 function renderPlatform(container, profile) {
   container.replaceChildren();
   const box = document.createElement("div");
@@ -558,12 +558,6 @@ function renderPlatform(container, profile) {
   const name = document.createElement("b");
   name.textContent = profile ? platformLabel(profile) : "—";
   box.append(name);
-  if (profile?.tokenAddress) {
-    const address = document.createElement("small");
-    address.title = profile.tokenAddress;
-    address.textContent = shortAddress(profile.tokenAddress);
-    box.append(address);
-  }
   container.append(box);
 }
 
