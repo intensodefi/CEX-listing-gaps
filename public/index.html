@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">CoinMarketCap · every market pair</p>
         <h1>Listing gaps</h1>
-        <p class="lede" id="lede">Assets with a spot, perpetual, or futures pair on one major exchange and not another.</p>
+        <p class="lede" id="lede">Compare any exchange market with any other, including the same exchange's spot and futures, or a whole country.</p>
       </div>
       <div class="mast-meta">
         <p id="status-line">Waiting for market data</p>
@@ -21,19 +21,11 @@
     </header>
 
     <section class="controls" aria-label="Comparison">
-      <fieldset class="markets">
-        <legend>Market</legend>
-        <div id="markets" class="segment"></div>
-      </fieldset>
-      <label>
-        Region
-        <select id="region"></select>
-      </label>
       <label>
         Listed on
         <select id="present"></select>
       </label>
-      <button type="button" id="swap" class="swap" aria-label="Swap exchanges">Swap</button>
+      <button type="button" id="swap" class="swap" aria-label="Swap listings">Swap</button>
       <label>
         Missing from
         <select id="absent"></select>
@@ -53,7 +45,7 @@
     <section class="panel">
       <div class="panel-head">
         <h2>Gap map</h2>
-        <p id="matrix-note">Each cell counts base assets with at least one pair on the row exchange and none on the column exchange.</p>
+        <p id="matrix-note">Each row and column is one listing: an exchange market or a country group. A cell counts assets on the row listing and not the column listing.</p>
       </div>
       <div class="matrix-scroll">
         <div id="matrix" class="matrix"></div>
@@ -83,10 +75,9 @@
 
     <footer>
       <p>
-        A coin is listed only when it is the base of at least one pair in the selected market.
-        Spot, perpetual, and dated futures are counted separately.
+        Spot, perpetual, and dated futures are separate listings, so Binance perpetual can be compared with Binance spot.
+        A country listing is the union of that market across the country's exchanges: listed there means listed on at least one of them.
         Spot pairs come from CoinMarketCap exchange markets. Perpetual and futures pairs come from the Pro derivatives endpoint.
-        Region is the exchange's home market.
       </p>
     </footer>
     <script type="module" src="/app.js"></script>

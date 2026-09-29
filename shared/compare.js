@@ -20,7 +20,7 @@ function assetList(entry) {
 
 export function comparisonState(book, present, absent) {
   if (!present || !absent || present === absent) {
-    return { ok: false, message: "Choose two different exchanges." };
+    return { ok: false, message: "Choose two different listings." };
   }
   const left = book?.[present];
   const right = book?.[absent];
@@ -67,37 +67,44 @@ export function overlapStats(book, present, absent, includeStable = false) {
   };
 }
 
-export function buildMatrix(book, exchanges, includeStable = false) {
-  const idsBySlug = new Map();
-  const listedBySlug = new Map();
-  for (const exchange of exchanges) {
-    const listed = assetList(book?.[exchange.slug]).filter((asset) => includeStable || !isStablecoin(asset));
-    listedBySlug.set(exchange.slug, listed);
-    idsBySlug.set(exchange.slug, new Set(listed.map((asset) => asset.id)));
+function optionKey(option) {
+  return option.id || option.slug;
+}
+
+export function buildMatrix(book, options, includeStable = false) {
+  const idsByKey = new Map();
+  const listedByKey = new Map();
+  for (const option of options) {
+    const key = optionKey(option);
+    const listed = assetList(book?.[key]).filter((asset) => includeStable || !isStablecoin(asset));
+    listedByKey.set(key, listed);
+    idsByKey.set(key, new Set(listed.map((asset) => asset.id)));
   }
   let maxGap = 0;
-  const rows = exchanges.map((exchange) => {
-    const entry = book?.[exchange.slug];
-    const listed = listedBySlug.get(exchange.slug) || [];
-    const cells = exchanges.map((other) => {
-      if (!entry?.ok || !book?.[other.slug]?.ok) {
-        return { slug: other.slug, kind: "missing", count: null };
+  const rows = options.map((option) => {
+    const key = optionKey(option);
+    const entry = book?.[key];
+    const listed = listedByKey.get(key) || [];
+    const cells = options.map((other) => {
+      const otherKey = optionKey(other);
+      if (!entry?.ok || !book?.[otherKey]?.ok) {
+        return { slug: otherKey, kind: "missing", count: null };
       }
-      if (other.slug === exchange.slug) {
-        return { slug: other.slug, kind: "self", count: listed.length };
+      if (otherKey === key) {
+        return { slug: otherKey, kind: "self", count: listed.length };
       }
-      const otherIds = idsBySlug.get(other.slug);
+      const otherIds = idsByKey.get(otherKey);
       let count = 0;
       for (const asset of listed) {
         if (!otherIds.has(asset.id)) count += 1;
       }
       if (count > maxGap) maxGap = count;
-      return { slug: other.slug, kind: "gap", count };
+      return { slug: otherKey, kind: "gap", count };
     });
     return {
-      slug: exchange.slug,
-      name: exchange.name,
-      short: exchange.short,
+      slug: key,
+      name: option.name,
+      short: option.short,
       ok: Boolean(entry?.ok),
       listed: entry?.ok ? listed.length : null,
       pairCount: entry?.pairCount || 0,
@@ -107,13 +114,19 @@ export function buildMatrix(book, exchanges, includeStable = false) {
   return { rows, maxGap };
 }
 
-export function missingElsewhere(assetId, book, exchanges, absentSlug) {
-  return exchanges
-    .filter((exchange) => {
-      if (exchange.slug === absentSlug) return false;
-      const entry = book?.[exchange.slug];
+export function missingElsewhere(assetId, resolved, options, absentId, presentId) {
+  const present = options.find((option) => optionKey(option) === presentId);
+  return options
+    .filter((option) => {
+      const id = optionKey(option);
+      if (id === absentId || id === presentId) return false;
+      const entry = resolved?.[id];
       if (!entry?.ok) return false;
-      return !assetList(entry).some((asset) => asset.id === assetId);
+      if (assetList(entry).some((asset) => asset.id === assetId)) return false;
+      if (option.kind === "region" && option.market === present?.market) return true;
+      if (present?.kind === "exchange" && option.kind === "exchange" && option.slug === present.slug) return true;
+      if (present?.kind === "region" && option.kind === "region" && option.region === present.region) return true;
+      return false;
     })
-    .map((exchange) => exchange.short);
+    .map((option) => option.short);
 }

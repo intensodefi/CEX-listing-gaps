@@ -1,9 +1,13 @@
-import { EXCHANGES, MARKETS, REGIONS, exchangesInRegion, regionName } from "/shared/exchanges.js";
+import { EXCHANGES } from "/shared/exchanges.js";
 import { buildMatrix, comparisonState, filterGaps, missingElsewhere, overlapStats } from "/shared/compare.js";
+import { listingOptions, resolveListings } from "/shared/venues.js";
+
+const OPTIONS = listingOptions();
+const PRESENT_DEFAULT = "ex:binance:perpetual";
+const ABSENT_DEFAULT = "ex:binance:spot";
 
 const presentSelect = document.querySelector("#present");
 const absentSelect = document.querySelector("#absent");
-const regionSelect = document.querySelector("#region");
 const queryInput = document.querySelector("#query");
 const stableInput = document.querySelector("#include-stable");
 const statusLine = document.querySelector("#status-line");
@@ -15,54 +19,21 @@ const rowsEl = document.querySelector("#rows");
 const emptyEl = document.querySelector("#empty");
 const tableTitle = document.querySelector("#table-title");
 const tableNote = document.querySelector("#table-note");
-const marketsEl = document.querySelector("#markets");
 
 const view = {
   snapshot: null,
-  market: "spot",
-  region: "all",
   sort: "pairs",
   direction: -1,
   timer: null,
+  matrixKey: "",
 };
 
-for (const market of MARKETS) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = market.name;
-  button.dataset.market = market.id;
-  button.className = market.id === view.market ? "on" : "";
-  button.addEventListener("click", () => {
-    view.market = market.id;
-    for (const item of marketsEl.querySelectorAll("button")) {
-      item.classList.toggle("on", item.dataset.market === view.market);
-    }
-    render();
-  });
-  marketsEl.append(button);
+function optionById(id) {
+  return OPTIONS.find((option) => option.id === id) || null;
 }
 
-for (const region of REGIONS) {
-  const option = document.createElement("option");
-  option.value = region.id;
-  option.textContent = region.name;
-  regionSelect.append(option);
-}
-
-function marketName(id) {
-  return MARKETS.find((market) => market.id === id)?.name || id;
-}
-
-function exchangeName(slug) {
-  return EXCHANGES.find((exchange) => exchange.slug === slug)?.name || slug;
-}
-
-function book() {
-  return view.snapshot?.books?.[view.market] || {};
-}
-
-function visibleExchanges() {
-  return exchangesInRegion(EXCHANGES, view.region);
+function optionName(id) {
+  return optionById(id)?.name || id;
 }
 
 function escapeHtml(value) {
@@ -80,43 +51,31 @@ function formatCount(value) {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
-function fillExchangeSelects() {
-  const exchanges = visibleExchanges();
-  const currentBook = book();
-  const previousPresent = presentSelect.value;
-  const previousAbsent = absentSelect.value;
-  for (const select of [presentSelect, absentSelect]) {
-    select.replaceChildren();
-    for (const exchange of exchanges) {
-      const entry = currentBook[exchange.slug];
-      const option = document.createElement("option");
-      option.value = exchange.slug;
-      const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
-      option.textContent = `${exchange.name}${pairs}`;
-      select.append(option);
-    }
-  }
-  const slugs = exchanges.map((exchange) => exchange.slug);
-  const preferred = preferredPair(slugs);
-  presentSelect.value = slugs.includes(previousPresent) ? previousPresent : preferred[0];
-  const absentStillValid = slugs.includes(previousAbsent) && previousAbsent !== presentSelect.value;
-  absentSelect.value = absentStillValid ? previousAbsent : preferred[1];
-  if (!absentSelect.value || absentSelect.value === presentSelect.value) {
-    absentSelect.value = slugs.find((slug) => slug !== presentSelect.value) || presentSelect.value;
-  }
+function resolvedListings() {
+  return resolveListings(view.snapshot?.books || {}, OPTIONS, EXCHANGES);
 }
 
-function preferredPair(slugs) {
-  const pairs = [
-    ["binance", "coinbase-exchange"],
-    ["upbit", "bithumb"],
-    ["bitflyer", "bitbank"],
-    ["bitstamp", "bitvavo"],
-  ];
-  for (const [left, right] of pairs) {
-    if (slugs.includes(left) && slugs.includes(right)) return [left, right];
+function fillSelect(select, resolved, selected, fallback) {
+  const previous = select.value || selected;
+  select.replaceChildren();
+  let groupName = "";
+  let group = null;
+  for (const option of OPTIONS) {
+    if (option.group !== groupName) {
+      group = document.createElement("optgroup");
+      group.label = option.group;
+      select.append(group);
+      groupName = option.group;
+    }
+    const entry = resolved[option.id];
+    const choice = document.createElement("option");
+    choice.value = option.id;
+    const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
+    choice.textContent = `${option.menuName}${pairs}`;
+    group.append(choice);
   }
-  return [slugs[0] || "", slugs[1] || slugs[0] || ""];
+  const ids = OPTIONS.map((option) => option.id);
+  select.value = ids.includes(previous) ? previous : fallback;
 }
 
 function gapColor(count, maxGap) {
@@ -149,26 +108,82 @@ function renderStatus() {
   const when = snapshot.updatedAt ? new Date(snapshot.updatedAt).toLocaleString() : "just now";
   const skipped = snapshot.failures?.length ? ` · ${snapshot.failures.length} feeds failed` : "";
   statusLine.textContent = `Updated ${when}${skipped}`;
-  lede.textContent = `${marketName(view.market)} pairs only. ${regionName(view.region)} exchanges. Listing means the asset is the base of at least one pair.`;
+  lede.textContent = "Each side can be an exchange market or a country group. Spot, perpetual, and dated futures stay separate.";
+}
+
+function renderMatrix(resolved, present, absent) {
+  const key = `${view.snapshot?.updatedAt || ""}|${stableInput.checked}|${present}|${absent}`;
+  if (key === view.matrixKey && matrixEl.childElementCount) return;
+  view.matrixKey = key;
+  const matrix = buildMatrix(resolved, OPTIONS, stableInput.checked);
+  matrixEl.replaceChildren();
+  const columns = `168px repeat(${OPTIONS.length}, minmax(52px, 1fr))`;
+  const head = document.createElement("div");
+  head.className = "matrix-head";
+  head.style.gridTemplateColumns = columns;
+  head.append(document.createElement("span"));
+  for (const option of OPTIONS) {
+    const label = document.createElement("span");
+    label.textContent = option.short;
+    label.title = option.name;
+    head.append(label);
+  }
+  matrixEl.append(head);
+  matrixNote.textContent = "Rows and columns use the same listings as the menus, including Binance spot next to Binance perpetual and each country group.";
+
+  for (const row of matrix.rows) {
+    const line = document.createElement("div");
+    line.className = "matrix-row";
+    line.style.gridTemplateColumns = columns;
+    const label = document.createElement("div");
+    label.className = "row-label";
+    label.textContent = row.name;
+    label.title = row.ok ? `${formatCount(row.pairCount)} pairs` : "Pair feed unavailable";
+    line.append(label);
+    for (const cell of row.cells) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `cell ${cell.kind}`;
+      button.textContent = cell.count === null ? "·" : String(cell.count);
+      button.disabled = cell.kind !== "gap";
+      if (cell.kind === "gap") {
+        button.style.background = gapColor(cell.count, matrix.maxGap);
+        button.title = `${cell.count} on ${optionName(row.slug)}, none on ${optionName(cell.slug)}`;
+        button.addEventListener("click", () => {
+          presentSelect.value = row.slug;
+          absentSelect.value = cell.slug;
+          render();
+        });
+      } else if (cell.kind === "self") {
+        button.title = `${optionName(row.slug)} lists ${cell.count} assets`;
+      }
+      if (row.slug === present && cell.slug === absent) button.classList.add("selected");
+      line.append(button);
+    }
+    matrixEl.append(line);
+  }
 }
 
 function render() {
   renderStatus();
-  fillExchangeSelects();
-  const currentBook = book();
-  const exchanges = visibleExchanges();
+  const resolved = resolvedListings();
+  fillSelect(presentSelect, resolved, PRESENT_DEFAULT, PRESENT_DEFAULT);
+  fillSelect(absentSelect, resolved, ABSENT_DEFAULT, ABSENT_DEFAULT);
+  if (absentSelect.value === presentSelect.value) {
+    absentSelect.value = OPTIONS.find((option) => option.id !== presentSelect.value)?.id || presentSelect.value;
+  }
   const present = presentSelect.value;
   const absent = absentSelect.value;
-  const state = comparisonState(currentBook, present, absent);
-  const stats = state.ok ? overlapStats(currentBook, present, absent, stableInput.checked) : null;
+  const state = comparisonState(resolved, present, absent);
+  const stats = state.ok ? overlapStats(resolved, present, absent, stableInput.checked) : null;
 
   statsEl.replaceChildren();
   const cards = stats
     ? [
-        [formatCount(stats.gap), `On ${exchangeName(present)}, not on ${exchangeName(absent)}`],
-        [formatCount(stats.reverseGap), `On ${exchangeName(absent)}, not on ${exchangeName(present)}`],
-        [formatCount(stats.presentPairs), `${marketName(view.market)} pairs on ${exchangeName(present)}`],
-        [formatCount(stats.onPresent), `Assets on ${exchangeName(present)}`],
+        [formatCount(stats.gap), `On ${optionName(present)}, not on ${optionName(absent)}`],
+        [formatCount(stats.reverseGap), `On ${optionName(absent)}, not on ${optionName(present)}`],
+        [formatCount(stats.presentPairs), `Pairs in ${optionName(present)}`],
+        [formatCount(stats.onPresent), `Assets on ${optionName(present)}`],
       ]
     : [["—", state.message || "Waiting for pair data"]];
   for (const [value, label] of cards) {
@@ -182,66 +197,20 @@ function render() {
     statsEl.append(card);
   }
 
-  const matrix = buildMatrix(currentBook, exchanges, stableInput.checked);
-  matrixEl.replaceChildren();
-  const columns = `118px repeat(${exchanges.length}, minmax(48px, 1fr))`;
-  const head = document.createElement("div");
-  head.className = "matrix-head";
-  head.style.gridTemplateColumns = columns;
-  head.append(document.createElement("span"));
-  for (const exchange of exchanges) {
-    const label = document.createElement("span");
-    label.textContent = exchange.short;
-    label.title = exchange.name;
-    head.append(label);
-  }
-  matrixEl.append(head);
-  matrixNote.textContent = `${marketName(view.market)} · ${regionName(view.region)}. Cell = assets with a pair on the row exchange and no pair on the column exchange.`;
-
-  for (const row of matrix.rows) {
-    const line = document.createElement("div");
-    line.className = "matrix-row";
-    line.style.gridTemplateColumns = columns;
-    const label = document.createElement("div");
-    label.className = "row-label";
-    label.textContent = exchangeName(row.slug);
-    label.title = row.ok ? `${formatCount(row.pairCount)} ${view.market} pairs` : "Pair feed unavailable";
-    line.append(label);
-    for (const cell of row.cells) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `cell ${cell.kind}`;
-      button.textContent = cell.count === null ? "·" : String(cell.count);
-      button.disabled = cell.kind !== "gap";
-      if (cell.kind === "gap") {
-        button.style.background = gapColor(cell.count, matrix.maxGap);
-        button.title = `${cell.count} ${view.market} assets on ${exchangeName(row.slug)}, none on ${exchangeName(cell.slug)}`;
-        button.addEventListener("click", () => {
-          presentSelect.value = row.slug;
-          absentSelect.value = cell.slug;
-          render();
-        });
-      } else if (cell.kind === "self") {
-        button.title = `${exchangeName(row.slug)} lists ${cell.count} ${view.market} assets`;
-      }
-      if (row.slug === present && cell.slug === absent) button.classList.add("selected");
-      line.append(button);
-    }
-    matrixEl.append(line);
-  }
+  renderMatrix(resolved, present, absent);
 
   const loading = !view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle";
   tableTitle.textContent = loading
     ? "Collecting pairs"
     : state.ok
-      ? `${marketName(view.market)} on ${exchangeName(present)}, not on ${exchangeName(absent)}`
+      ? `On ${optionName(present)}, not on ${optionName(absent)}`
       : state.message;
   tableNote.textContent = state.ok
-    ? "Built from every pair in this market, not a top-100 sample."
+    ? "Same exchange, different markets, and country groups are all valid sides."
     : "";
 
   let gaps = state.ok
-    ? filterGaps(currentBook, {
+    ? filterGaps(resolved, {
         present,
         absent,
         query: queryInput.value,
@@ -294,15 +263,22 @@ function render() {
       ? `${shownQuotes.join(" · ")} +${extra}`
       : shownQuotes.join(" · ");
     const pills = tr.querySelector(".pills");
-    const missing = missingElsewhere(asset.id, currentBook, exchanges, absent);
-    if (missing.length === 0) {
-      pills.textContent = "Listed on the other venues in this region";
+    const missing = missingElsewhere(asset.id, resolved, OPTIONS, absent, present);
+    const shown = missing.slice(0, 8);
+    if (shown.length === 0) {
+      pills.textContent = "Listed on the other country groups and sibling markets";
     } else {
-      for (const short of missing) {
+      for (const short of shown) {
         const pill = document.createElement("span");
         pill.className = "pill";
         pill.textContent = short;
         pills.append(pill);
+      }
+      if (missing.length > shown.length) {
+        const more = document.createElement("span");
+        more.className = "pill";
+        more.textContent = `+${missing.length - shown.length}`;
+        pills.append(more);
       }
     }
     rowsEl.append(tr);
@@ -312,6 +288,7 @@ function render() {
 async function pull() {
   const response = await fetch("/api/snapshot");
   view.snapshot = await response.json();
+  view.matrixKey = "";
   render();
   if (!view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle") {
     view.timer = window.setTimeout(pull, 700);
@@ -320,12 +297,11 @@ async function pull() {
 
 presentSelect.addEventListener("change", render);
 absentSelect.addEventListener("change", render);
-regionSelect.addEventListener("change", () => {
-  view.region = regionSelect.value;
+queryInput.addEventListener("input", render);
+stableInput.addEventListener("change", () => {
+  view.matrixKey = "";
   render();
 });
-queryInput.addEventListener("input", render);
-stableInput.addEventListener("change", render);
 document.querySelector("#swap").addEventListener("click", () => {
   const next = presentSelect.value;
   presentSelect.value = absentSelect.value;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { filterGaps, isStablecoin, missingElsewhere, overlapStats, comparisonState, buildMatrix } from "./compare.js";
 import { exchangesInRegion, EXCHANGES } from "./exchanges.js";
+import { listingOptions, resolveListings } from "./venues.js";
 
 const spot = {
   binance: {
@@ -90,12 +91,71 @@ test("matrix skips exchanges whose pair fetch failed", () => {
   assert.equal(binance.cells.find((cell) => cell.slug === "upbit").kind, "missing");
 });
 
-test("missing elsewhere ignores the selected venue and failed venues", () => {
-  const exchanges = EXCHANGES.filter((exchange) => ["binance", "coinbase-exchange", "kraken"].includes(exchange.slug));
-  const book = {
-    ...spot,
-    kraken: { ok: true, pairCount: 0, assets: [] },
+test("binance perpetual and binance spot are separate listings", () => {
+  const exchanges = [
+    { slug: "binance", name: "Binance", short: "BN", region: "global" },
+    { slug: "coinbase-exchange", name: "Coinbase", short: "CB", region: "us" },
+    { slug: "kraken", name: "Kraken", short: "KR", region: "us" },
+  ];
+  const regions = [
+    { id: "us", name: "United States" },
+    { id: "global", name: "Global" },
+  ];
+  const markets = [
+    { id: "spot", name: "Spot" },
+    { id: "perpetual", name: "Perpetual" },
+    { id: "futures", name: "Futures" },
+  ];
+  const books = {
+    spot: {
+      binance: {
+        ok: true,
+        pairCount: 2,
+        assets: [
+          { id: 1, symbol: "BTC", name: "Bitcoin", stable: false, pairs: 1, quotes: ["USDT"] },
+          { id: 2, symbol: "ETH", name: "Ethereum", stable: false, pairs: 1, quotes: ["USDT"] },
+        ],
+      },
+      "coinbase-exchange": {
+        ok: true,
+        pairCount: 1,
+        assets: [{ id: 1, symbol: "BTC", name: "Bitcoin", stable: false, pairs: 1, quotes: ["USD"] }],
+      },
+      kraken: {
+        ok: true,
+        pairCount: 1,
+        assets: [{ id: 3, symbol: "SOL", name: "Solana", stable: false, pairs: 1, quotes: ["USD"] }],
+      },
+    },
+    perpetual: {
+      binance: {
+        ok: true,
+        pairCount: 2,
+        assets: [
+          { id: 1, symbol: "BTC", name: "Bitcoin", stable: false, pairs: 1, quotes: ["USDT"] },
+          { id: 9, symbol: "DOGE", name: "Dogecoin", stable: false, pairs: 1, quotes: ["USDT"] },
+        ],
+      },
+      "coinbase-exchange": { ok: true, pairCount: 0, assets: [] },
+      kraken: { ok: true, pairCount: 0, assets: [] },
+    },
+    futures: {
+      binance: { ok: true, pairCount: 1, assets: [{ id: 1, symbol: "BTC", name: "Bitcoin", stable: false, pairs: 1, quotes: ["USDT"] }] },
+      "coinbase-exchange": { ok: true, pairCount: 0, assets: [] },
+      kraken: { ok: true, pairCount: 0, assets: [] },
+    },
   };
-  const missing = missingElsewhere(2, book, exchanges, "coinbase-exchange");
-  assert.deepEqual(missing, ["KR"]);
+  const options = listingOptions(exchanges, regions, markets);
+  const resolved = resolveListings(books, options, exchanges);
+  const gaps = filterGaps(resolved, { present: "ex:binance:perpetual", absent: "ex:binance:spot" });
+  assert.deepEqual(gaps.map((asset) => asset.symbol), ["DOGE"]);
+  const us = resolved["region:us:spot"];
+  assert.equal(us.ok, true);
+  assert.deepEqual(us.assets.map((asset) => asset.symbol).sort(), ["BTC", "SOL"]);
+  const countryGap = filterGaps(resolved, { present: "ex:binance:spot", absent: "region:us:spot" });
+  assert.deepEqual(countryGap.map((asset) => asset.symbol), ["ETH"]);
+  const missing = missingElsewhere(9, resolved, options, "ex:binance:spot", "ex:binance:perpetual");
+  assert.equal(missing.includes("BN·S"), false);
+  assert.equal(missing.includes("BN·F"), true);
+  assert.equal(missing.includes("US·P"), true);
 });

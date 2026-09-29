@@ -1,8 +1,8 @@
 # CMC listing dashboard
 
-Compares major centralized exchanges using every market pair CoinMarketCap tracks. Spot, perpetual, and dated futures are separate. A coin counts as listed only when it is the base of at least one pair in the selected market.
+Compares listings built from every market pair CoinMarketCap tracks. Each side of a comparison is one listing: an exchange's spot, perpetual, or dated futures book, or the same market combined across a country's exchanges. Binance perpetual can be compared with Binance spot. South Korea spot can be compared with United States spot.
 
-Regions group exchanges by home market: United States, South Korea, Japan, Europe, and global venues.
+A coin counts as listed only when it is the base of at least one pair in that listing. A country listing is the union of its exchanges.
 
 ## Data
 

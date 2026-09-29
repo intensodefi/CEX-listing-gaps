@@ -86,7 +86,7 @@ button, select, input { font: inherit; color: inherit; }
 
 .controls {
   display: grid;
-  grid-template-columns: auto minmax(160px, 0.8fr) minmax(180px, 1fr) auto minmax(180px, 1fr) minmax(160px, 0.9fr) auto;
+  grid-template-columns: minmax(240px, 1.2fr) auto minmax(240px, 1.2fr) minmax(180px, 0.8fr) auto;
   gap: 12px;
   align-items: end;
 }
@@ -232,6 +232,8 @@ select, input[type="search"] {
   display: flex;
   align-items: center;
   font-weight: 650;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .cell {
