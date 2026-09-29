@@ -350,12 +350,112 @@ th, td {
   vertical-align: middle;
 }
 
-th button {
+th button[data-sort] {
   padding: 0;
   font-size: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.th-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+th .col-filter {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  color: var(--muted);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+th .col-filter svg { display: block; }
+
+th .col-filter.on {
+  color: var(--rust);
+  border-color: var(--rust);
+  background: #f8e7df;
+}
+
+th .col-filter:disabled { opacity: 0.35; cursor: default; }
+
+.filter-count {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--rust);
+  color: var(--paper);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.filter-panel {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+  width: min(320px, calc(100vw - 16px));
+  padding: 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--ink);
+  box-shadow: 0 12px 28px rgba(27, 25, 20, 0.16);
+}
+
+.filter-panel[hidden] { display: none; }
+
+.filter-panel p {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.filter-panel input[type="search"] { height: 36px; }
+
+.filter-options {
+  display: grid;
+  align-content: start;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.filter-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 2px;
+  color: var(--ink);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.filter-option span:last-child {
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.filter-empty {
+  padding: 8px 2px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }

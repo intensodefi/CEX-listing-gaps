@@ -1,6 +1,7 @@
 import { EXCHANGES } from "/shared/exchanges.js";
 import { comparisonState, filterGaps, missingExchanges, overlapStats } from "/shared/compare.js";
 import { platformLabel, tableToCsv } from "/shared/csv.js";
+import { columnFiltersActive, matchesColumnFilters } from "/shared/filter.js";
 import { listingOptions, resolveListings } from "/shared/venues.js";
 
 const OPTIONS = listingOptions();
@@ -42,7 +43,17 @@ const view = {
   sort: "pairs",
   direction: -1,
   timer: null,
+  filters: { platform: [], tag: [], missing: [] },
+  filterKey: "",
+  filterQuery: "",
+  described: [],
 };
+
+const FILTER_LABELS = { platform: "Platform", tag: "Tags", missing: "Also missing from" };
+const filterPanel = document.querySelector("#filter-panel");
+const filterTitle = document.querySelector("#filter-title");
+const filterSearch = document.querySelector("#filter-search");
+const filterOptions = document.querySelector("#filter-options");
 
 let hidePopoverTimer = 0;
 
@@ -174,6 +185,7 @@ function choose(side, id) {
   if (id !== previous) {
     sides[side].value = id;
     if (sides[other].value === id) sides[other].value = previous;
+    clearColumnFilters();
   }
   closeSide(side, false);
   inputs[side].blur();
@@ -386,6 +398,130 @@ function comparedBooks() {
   };
 }
 
+function clearColumnFilters() {
+  view.filters = { platform: [], tag: [], missing: [] };
+  closeFilter();
+}
+
+function describedGaps() {
+  const present = sides.present.value;
+  const absent = sides.absent.value;
+  return visibleGaps().map((asset) => {
+    const profile = profileFor(asset.id);
+    const exchanges = missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present);
+    return {
+      asset,
+      platform: profile ? platformLabel(profile) : "",
+      tags: profile?.tags || [],
+      missing: exchanges.map((exchange) => exchange.label),
+      exchanges,
+    };
+  });
+}
+
+function displayedRows() {
+  view.described = describedGaps();
+  return view.described.filter((row) => matchesColumnFilters(row, view.filters));
+}
+
+function filterChoices(key) {
+  const narrowed = view.described.filter((row) => matchesColumnFilters(row, { ...view.filters, [key]: [] }));
+  const counts = new Map();
+  for (const row of narrowed) {
+    const values = key === "platform" ? [row.platform] : row[key === "tag" ? "tags" : "missing"];
+    for (const value of values) {
+      if (!value) continue;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+  }
+  for (const value of view.filters[key] || []) {
+    if (!counts.has(value)) counts.set(value, 0);
+  }
+  const query = view.filterQuery.trim().toLowerCase();
+  return [...counts.entries()]
+    .filter(([value]) => !query || value.toLowerCase().includes(query))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function paintFilterOptions() {
+  const key = view.filterKey;
+  if (!key) return;
+  filterOptions.replaceChildren();
+  const choices = filterChoices(key);
+  if (!choices.length) {
+    const empty = document.createElement("p");
+    empty.className = "filter-empty";
+    empty.textContent = "No values match";
+    filterOptions.append(empty);
+    return;
+  }
+  const selected = new Set(view.filters[key]);
+  for (const [value, count] of choices) {
+    const label = document.createElement("label");
+    label.className = "filter-option";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = selected.has(value);
+    input.addEventListener("change", () => {
+      const current = view.filters[key];
+      view.filters[key] = input.checked ? [...current, value] : current.filter((item) => item !== value);
+      render();
+    });
+    const name = document.createElement("span");
+    name.textContent = value;
+    const tally = document.createElement("span");
+    tally.textContent = formatCount(count);
+    label.append(input, name, tally);
+    filterOptions.append(label);
+  }
+}
+
+function placeFilter(anchor) {
+  filterPanel.hidden = false;
+  filterPanel.style.maxHeight = "none";
+  const rect = anchor.getBoundingClientRect();
+  const width = filterPanel.offsetWidth || 320;
+  const margin = 8;
+  let left = rect.left;
+  if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
+  filterPanel.style.left = `${Math.max(margin, left)}px`;
+  filterPanel.style.top = `${rect.bottom + 6}px`;
+  const needed = filterPanel.offsetHeight;
+  if (rect.bottom + 6 + needed > window.innerHeight - margin) {
+    filterPanel.style.top = `${Math.max(margin, rect.top - needed - 6)}px`;
+  }
+}
+
+function openFilter(key, anchor) {
+  view.filterKey = key;
+  view.filterQuery = "";
+  filterSearch.value = "";
+  filterTitle.textContent = FILTER_LABELS[key];
+  paintFilterOptions();
+  placeFilter(anchor);
+  filterSearch.focus();
+}
+
+function closeFilter() {
+  view.filterKey = "";
+  view.filterQuery = "";
+  filterPanel.hidden = true;
+  filterOptions.replaceChildren();
+}
+
+function syncFilterButtons() {
+  const profilesReady = view.snapshot?.profilesReady === true;
+  for (const button of document.querySelectorAll(".col-filter")) {
+    const key = button.dataset.filter;
+    const count = (view.filters[key] || []).length;
+    button.classList.toggle("on", count > 0);
+    const badge = button.querySelector(".filter-count");
+    badge.hidden = count === 0;
+    badge.textContent = String(count);
+    button.disabled = key !== "missing" && !profilesReady;
+  }
+}
+
 function visibleGaps() {
   const present = sides.present.value;
   const absent = sides.absent.value;
@@ -474,21 +610,19 @@ function exportName() {
 }
 
 function exportCsv() {
-  const present = sides.present.value;
-  const absent = sides.absent.value;
-  const rows = visibleGaps().map((asset) => {
-    const profile = profileFor(asset.id);
+  const rows = displayedRows().map((row) => {
+    const profile = profileFor(row.asset.id);
     return {
-      symbol: asset.symbol,
-      name: asset.name || "",
-      id: asset.id,
-      slug: asset.slug || "",
-      pairs: asset.pairs || 0,
-      quotes: asset.quotes || [],
-      tags: profile?.tags || [],
-      platform: platformLabel(profile),
+      symbol: row.asset.symbol,
+      name: row.asset.name || "",
+      id: row.asset.id,
+      slug: row.asset.slug || "",
+      pairs: row.asset.pairs || 0,
+      quotes: row.asset.quotes || [],
+      tags: row.tags,
+      platform: row.platform,
       tokenAddress: profile?.tokenAddress || "",
-      missing: missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present).map((exchange) => exchange.label),
+      missing: row.missing,
     };
   });
   const blob = new Blob([`\uFEFF${tableToCsv(rows)}`], { type: "text/csv;charset=utf-8" });
@@ -547,13 +681,20 @@ function render() {
       : `Loading tags and platforms${view.snapshot?.profileTotal ? ` (${formatCount(view.snapshot.profileDone)}/${formatCount(view.snapshot.profileTotal)})` : ""}.`;
   exportButton.disabled = !state.ok || !profilesReady;
 
-  const gaps = state.ok ? visibleGaps() : [];
+  const shown = state.ok ? displayedRows() : [];
+  const filtered = columnFiltersActive(view.filters);
+  if (state.ok && profilesReady && filtered) {
+    tableNote.textContent = `Showing ${formatCount(shown.length)} of ${formatCount(view.described.length)} assets.`;
+  }
+  syncFilterButtons();
+  if (view.filterKey) paintFilterOptions();
 
   rowsEl.replaceChildren();
-  emptyEl.hidden = gaps.length > 0 || loading || !state.ok;
-  emptyEl.textContent = queryInput.value ? "No assets match this search." : "No assets match this comparison.";
+  emptyEl.hidden = shown.length > 0 || loading || !state.ok;
+  emptyEl.textContent = filtered || queryInput.value ? "No assets match these filters." : "No assets match this comparison.";
 
-  for (const asset of gaps) {
+  for (const row of shown) {
+    const asset = row.asset;
     const tr = document.createElement("tr");
     const quotes = asset.quotes || [];
     const shownQuotes = quotes.slice(0, 4);
@@ -591,11 +732,8 @@ function render() {
       : shownQuotes.join(" · ");
     const profile = profileFor(asset.id);
     renderPlatform(tr.querySelector(".platform-cell"), profile);
-    renderTags(tr.querySelector(".tags-cell"), profile?.tags || []);
-    renderMissing(
-      tr.querySelector(".missing"),
-      missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present),
-    );
+    renderTags(tr.querySelector(".tags-cell"), row.tags);
+    renderMissing(tr.querySelector(".missing"), row.exchanges);
     rowsEl.append(tr);
   }
 }
@@ -652,8 +790,13 @@ popover.addEventListener("mouseleave", scheduleHidePopover);
 document.addEventListener("pointerdown", (event) => {
   if (!event.target.closest(".combo")) closeCombos();
   if (!event.target.closest(".ex-more") && !event.target.closest(".ex-pop")) hidePopover();
+  if (!event.target.closest(".col-filter") && !event.target.closest(".filter-panel")) closeFilter();
 });
-window.addEventListener("scroll", hidePopover, true);
+window.addEventListener("scroll", (event) => {
+  hidePopover();
+  if (filterPanel.contains(event.target)) return;
+  closeFilter();
+}, true);
 queryInput.addEventListener("input", render);
 stableInput.addEventListener("change", render);
 exportButton.addEventListener("click", exportCsv);
@@ -661,6 +804,7 @@ document.querySelector("#swap").addEventListener("click", () => {
   const next = sides.present.value;
   sides.present.value = sides.absent.value;
   sides.absent.value = next;
+  clearColumnFilters();
   closeCombos();
   render();
 });
@@ -670,7 +814,29 @@ document.querySelector("#refresh").addEventListener("click", async () => {
   window.clearTimeout(view.timer);
   pull();
 });
-for (const button of document.querySelectorAll("th button")) {
+filterSearch.addEventListener("input", () => {
+  view.filterQuery = filterSearch.value;
+  paintFilterOptions();
+});
+filterSearch.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeFilter();
+});
+document.querySelector("#filter-clear").addEventListener("click", () => {
+  if (!view.filterKey) return;
+  view.filters[view.filterKey] = [];
+  render();
+});
+for (const button of document.querySelectorAll(".col-filter")) {
+  button.addEventListener("click", () => {
+    if (button.disabled) return;
+    if (view.filterKey === button.dataset.filter && !filterPanel.hidden) {
+      closeFilter();
+      return;
+    }
+    openFilter(button.dataset.filter, button);
+  });
+}
+for (const button of document.querySelectorAll("th button[data-sort]")) {
   button.addEventListener("click", () => {
     const sort = button.dataset.sort;
     view.direction = view.sort === sort ? view.direction * -1 : sort === "symbol" ? 1 : -1;

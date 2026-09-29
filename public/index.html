@@ -71,9 +71,30 @@
               <th><button type="button" data-sort="symbol">Asset</button></th>
               <th><button type="button" data-sort="pairs">Pairs</button></th>
               <th>Quotes</th>
-              <th>Platform</th>
-              <th>Tags</th>
-              <th>Also missing from</th>
+              <th>
+                <span class="th-label">Platform
+                  <button type="button" class="col-filter" data-filter="platform" aria-label="Filter platform">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M4 5h16l-6 7v6l-4 2v-8L4 5z"/></svg>
+                    <span class="filter-count" hidden></span>
+                  </button>
+                </span>
+              </th>
+              <th>
+                <span class="th-label">Tags
+                  <button type="button" class="col-filter" data-filter="tag" aria-label="Filter tags">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M4 5h16l-6 7v6l-4 2v-8L4 5z"/></svg>
+                    <span class="filter-count" hidden></span>
+                  </button>
+                </span>
+              </th>
+              <th>
+                <span class="th-label">Also missing from
+                  <button type="button" class="col-filter" data-filter="missing" aria-label="Filter also missing from">
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M4 5h16l-6 7v6l-4 2v-8L4 5z"/></svg>
+                    <span class="filter-count" hidden></span>
+                  </button>
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
@@ -89,6 +110,12 @@
         Spot pairs come from CoinMarketCap exchange markets. Perpetual and futures pairs come from the Pro derivatives endpoint.
       </p>
     </footer>
+    <div id="filter-panel" class="filter-panel" hidden>
+      <p id="filter-title">Filter</p>
+      <input id="filter-search" type="search" placeholder="Search values" autocomplete="off" />
+      <div id="filter-options" class="filter-options"></div>
+      <button type="button" id="filter-clear" class="text-button">Clear</button>
+    </div>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

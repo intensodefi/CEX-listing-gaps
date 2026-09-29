@@ -19,7 +19,7 @@ cp .env.example .env
 npm start
 ```
 
-Open http://127.0.0.1:4173. Export CSV downloads the assets currently shown in the table.
+Open http://127.0.0.1:4173. The platform, tags, and also-missing columns can be filtered. Export CSV downloads the assets currently shown in the table.
 
 The first load walks every exchange and market, then caches the result in `data/` for 30 minutes.
 
