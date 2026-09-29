@@ -6,6 +6,8 @@ A coin counts as listed only when it is the base of at least one pair in that li
 
 ## Use cases
 
+By using this tool, you can discover promising projects that are already listed on major exchanges but not yet available on all of them, helping you identify potential investment opportunities and assess their growth potential.
+
 - **Same exchange, two markets.** Compare Binance perpetual with Binance spot. The table lists assets that have a perpetual pair on Binance and no spot pair there. Swap the sides for assets on Binance spot with no Binance perpetual.
 - **One exchange against another.** Compare Coinbase spot with Kraken spot to see which bases one book lists and the other does not.
 - **One country against another.** Compare South Korea spot with United States spot. A coin is on a country when at least one of that country's exchanges lists it. With a country selected, the page lists the member exchanges: Coinbase, Kraken, Gemini, and Binance.US for the United States; Upbit, Bithumb, Coinone, Korbit, and GOPAX for South Korea; bitFlyer, Bitbank, and Coincheck for Japan; Bitstamp and Bitvavo for Europe; Binance, Bybit, OKX, KuCoin, Gate, Bitget, MEXC, HTX, and Crypto.com for Global.
