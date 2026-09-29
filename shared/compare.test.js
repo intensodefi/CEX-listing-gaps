@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterGaps, isStablecoin, missingElsewhere, overlapStats, comparisonState, buildMatrix } from "./compare.js";
+import { filterGaps, isStablecoin, missingExchanges, overlapStats, comparisonState, buildMatrix } from "./compare.js";
 import { exchangesInRegion, EXCHANGES } from "./exchanges.js";
 import { listingOptions, resolveListings } from "./venues.js";
 
@@ -154,8 +154,59 @@ test("binance perpetual and binance spot are separate listings", () => {
   assert.deepEqual(us.assets.map((asset) => asset.symbol).sort(), ["BTC", "SOL"]);
   const countryGap = filterGaps(resolved, { present: "ex:binance:spot", absent: "region:us:spot" });
   assert.deepEqual(countryGap.map((asset) => asset.symbol), ["ETH"]);
-  const missing = missingElsewhere(9, resolved, options, "ex:binance:spot", "ex:binance:perpetual");
-  assert.equal(missing.includes("BN·S"), false);
-  assert.equal(missing.includes("BN·F"), true);
-  assert.equal(missing.includes("US·P"), true);
+  const missing = missingExchanges(9, resolved, options, exchanges, "ex:binance:spot", "ex:binance:perpetual");
+  assert.deepEqual(missing.map((exchange) => exchange.label), [
+    "Coinbase · Perpetual",
+    "Kraken · Perpetual",
+    "Binance · Futures",
+  ]);
+});
+
+test("a missing country expands into each member exchange", () => {
+  const exchanges = [
+    { id: 89, slug: "coinbase-exchange", name: "Coinbase", short: "CB", region: "us" },
+    { id: 24, slug: "kraken", name: "Kraken", short: "KR", region: "us" },
+    { id: 151, slug: "gemini", name: "Gemini", short: "GM", region: "us" },
+    { id: 630, slug: "binance-us", name: "Binance.US", short: "BU", region: "us" },
+    { id: 270, slug: "binance", name: "Binance", short: "BN", region: "global" },
+  ];
+  const regions = [
+    { id: "us", name: "United States" },
+    { id: "global", name: "Global" },
+  ];
+  const markets = [
+    { id: "spot", name: "Spot" },
+    { id: "perpetual", name: "Perpetual" },
+  ];
+  const empty = { ok: true, pairCount: 0, assets: [] };
+  const books = {
+    spot: {
+      binance: empty,
+      "coinbase-exchange": empty,
+      kraken: empty,
+      gemini: empty,
+      "binance-us": empty,
+    },
+    perpetual: {
+      binance: {
+        ok: true,
+        pairCount: 1,
+        assets: [{ id: 9, symbol: "DOGE", name: "Dogecoin", stable: false, pairs: 1, quotes: ["USDT"] }],
+      },
+      "coinbase-exchange": empty,
+      kraken: empty,
+      gemini: empty,
+      "binance-us": empty,
+    },
+  };
+  const options = listingOptions(exchanges, regions, markets);
+  const resolved = resolveListings(books, options, exchanges);
+  const missing = missingExchanges(9, resolved, options, exchanges, "ex:binance:spot", "ex:binance:perpetual");
+  assert.deepEqual(missing.map((exchange) => exchange.slug), [
+    "coinbase-exchange",
+    "kraken",
+    "gemini",
+    "binance-us",
+  ]);
+  assert.ok(missing.length > 3);
 });

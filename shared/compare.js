@@ -114,19 +114,42 @@ export function buildMatrix(book, options, includeStable = false) {
   return { rows, maxGap };
 }
 
-export function missingElsewhere(assetId, resolved, options, absentId, presentId) {
+function marketName(option) {
+  const parts = String(option.name || "").split(" · ");
+  return parts.length > 1 ? parts[parts.length - 1] : option.market;
+}
+
+export function missingExchanges(assetId, resolved, options, exchanges, absentId, presentId) {
   const present = options.find((option) => optionKey(option) === presentId);
-  return options
-    .filter((option) => {
-      const id = optionKey(option);
-      if (id === absentId || id === presentId) return false;
-      const entry = resolved?.[id];
-      if (!entry?.ok) return false;
-      if (assetList(entry).some((asset) => asset.id === assetId)) return false;
-      if (option.kind === "region" && option.market === present?.market) return true;
-      if (present?.kind === "exchange" && option.kind === "exchange" && option.slug === present.slug) return true;
-      if (present?.kind === "region" && option.kind === "region" && option.region === present.region) return true;
-      return false;
-    })
-    .map((option) => option.short);
+  const seen = new Set();
+  const rows = [];
+  for (const option of options) {
+    const id = optionKey(option);
+    if (id === absentId || id === presentId) continue;
+    const entry = resolved?.[id];
+    if (!entry?.ok) continue;
+    if (assetList(entry).some((asset) => asset.id === assetId)) continue;
+    const sameMarketRegion = option.kind === "region" && option.market === present?.market;
+    const siblingExchange = present?.kind === "exchange" && option.kind === "exchange" && option.slug === present.slug;
+    const siblingRegion = present?.kind === "region" && option.kind === "region" && option.region === present.region;
+    if (!sameMarketRegion && !siblingExchange && !siblingRegion) continue;
+    const members = option.kind === "exchange"
+      ? exchanges.filter((exchange) => exchange.slug === option.slug)
+      : exchanges.filter((exchange) => exchange.region === option.region);
+    const market = marketName(option);
+    for (const exchange of members) {
+      const key = `${exchange.slug}:${option.market}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        id: exchange.id,
+        slug: exchange.slug,
+        name: exchange.name,
+        short: exchange.short,
+        market: option.market,
+        label: `${exchange.name} · ${market}`,
+      });
+    }
+  }
+  return rows;
 }

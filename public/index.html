@@ -21,15 +21,29 @@
     </header>
 
     <section class="controls" aria-label="Comparison">
-      <label>
-        Listed on
-        <select id="present"></select>
-      </label>
-      <button type="button" id="swap" class="swap" aria-label="Swap listings">Swap</button>
-      <label>
-        Missing from
-        <select id="absent"></select>
-      </label>
+      <div class="combo" data-side="present">
+        <label for="present">Listed on</label>
+        <div class="combo-box">
+          <input id="present" class="combo-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="present-list" autocomplete="off" spellcheck="false" />
+          <button type="button" class="combo-toggle" tabindex="-1" aria-label="Show listings for Listed on">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+        <div id="present-list" class="combo-list" role="listbox" hidden></div>
+      </div>
+      <button type="button" id="swap" class="swap" aria-label="Swap listings">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M7 7h11.17l-2.58-2.59L17 3l5 5-5 5-1.41-1.41L18.17 9H7V7zm10 10H5.83l2.58 2.59L7 21l-5-5 5-5 1.41 1.41L5.83 15H17v2z"/></svg>
+      </button>
+      <div class="combo" data-side="absent">
+        <label for="absent">Missing from</label>
+        <div class="combo-box">
+          <input id="absent" class="combo-input" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="absent-list" autocomplete="off" spellcheck="false" />
+          <button type="button" class="combo-toggle" tabindex="-1" aria-label="Show listings for Missing from">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+        <div id="absent-list" class="combo-list" role="listbox" hidden></div>
+      </div>
       <label class="search">
         Search
         <input id="query" type="search" placeholder="Symbol or name" autocomplete="off" />
@@ -61,16 +75,6 @@
         </table>
       </div>
       <p id="empty" class="empty" hidden>No assets match this comparison.</p>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h2>Gap map</h2>
-        <p id="matrix-note">Each row and column is one listing: an exchange market or a country group. A cell counts assets on the row listing and not the column listing.</p>
-      </div>
-      <div class="matrix-scroll">
-        <div id="matrix" class="matrix"></div>
-      </div>
     </section>
 
     <footer>

@@ -1,32 +1,47 @@
 import { EXCHANGES } from "/shared/exchanges.js";
-import { buildMatrix, comparisonState, filterGaps, missingElsewhere, overlapStats } from "/shared/compare.js";
+import { comparisonState, filterGaps, missingExchanges, overlapStats } from "/shared/compare.js";
 import { listingOptions, resolveListings } from "/shared/venues.js";
 
 const OPTIONS = listingOptions();
 const PRESENT_DEFAULT = "ex:binance:perpetual";
 const ABSENT_DEFAULT = "ex:binance:spot";
+const LOGO_LIMIT = 3;
 
-const presentSelect = document.querySelector("#present");
-const absentSelect = document.querySelector("#absent");
+const presentInput = document.querySelector("#present");
+const absentInput = document.querySelector("#absent");
 const queryInput = document.querySelector("#query");
 const stableInput = document.querySelector("#include-stable");
 const statusLine = document.querySelector("#status-line");
 const lede = document.querySelector("#lede");
 const statsEl = document.querySelector("#stats");
-const matrixEl = document.querySelector("#matrix");
-const matrixNote = document.querySelector("#matrix-note");
 const rowsEl = document.querySelector("#rows");
 const emptyEl = document.querySelector("#empty");
 const tableTitle = document.querySelector("#table-title");
 const tableNote = document.querySelector("#table-note");
+const popover = document.createElement("div");
+popover.className = "ex-pop";
+popover.hidden = true;
+document.body.append(popover);
+
+const inputs = { present: presentInput, absent: absentInput };
+const lists = {
+  present: document.querySelector("#present-list"),
+  absent: document.querySelector("#absent-list"),
+};
+const sides = {
+  present: { value: PRESENT_DEFAULT, open: false, active: 0, query: "" },
+  absent: { value: ABSENT_DEFAULT, open: false, active: 0, query: "" },
+};
 
 const view = {
   snapshot: null,
+  resolved: {},
   sort: "pairs",
   direction: -1,
   timer: null,
-  matrixKey: "",
 };
+
+let hidePopoverTimer = 0;
 
 function optionById(id) {
   return OPTIONS.find((option) => option.id === id) || null;
@@ -55,36 +70,153 @@ function resolvedListings() {
   return resolveListings(view.snapshot?.books || {}, OPTIONS, EXCHANGES);
 }
 
-function fillSelect(select, resolved, selected, fallback) {
-  const previous = select.value || selected;
-  select.replaceChildren();
-  let groupName = "";
-  let group = null;
-  for (const option of OPTIONS) {
-    if (option.group !== groupName) {
-      group = document.createElement("optgroup");
-      group.label = option.group;
-      select.append(group);
-      groupName = option.group;
-    }
-    const entry = resolved[option.id];
-    const choice = document.createElement("option");
-    choice.value = option.id;
-    const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
-    choice.textContent = `${option.name}${pairs}`;
-    group.append(choice);
-  }
-  const ids = OPTIONS.map((option) => option.id);
-  select.value = ids.includes(previous) ? previous : fallback;
+function listingLabel(id) {
+  const option = optionById(id);
+  if (!option) return "";
+  const entry = view.resolved?.[id];
+  const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
+  return `${option.name}${pairs}`;
 }
 
-function gapColor(count, maxGap) {
-  if (!count) return "#f7f3ea";
-  const t = Math.min(1, count / Math.max(maxGap, 1));
-  const red = Math.round(239 + (184 - 239) * t);
-  const green = Math.round(230 + (67 - 230) * t);
-  const blue = Math.round(214 + (31 - 214) * t);
-  return `rgb(${red}, ${green}, ${blue})`;
+function otherSide(side) {
+  return side === "present" ? "absent" : "present";
+}
+
+function visibleOptions(side) {
+  const query = sides[side].query.trim().toLowerCase();
+  if (!query) return OPTIONS;
+  return OPTIONS.filter((option) => `${option.name} ${option.group} ${option.short}`.toLowerCase().includes(query));
+}
+
+function closeSide(side, restore = true) {
+  sides[side].open = false;
+  sides[side].query = "";
+  const input = inputs[side];
+  const list = lists[side];
+  input.setAttribute("aria-expanded", "false");
+  input.removeAttribute("aria-activedescendant");
+  input.closest(".combo").classList.remove("open");
+  list.hidden = true;
+  list.replaceChildren();
+  if (restore && document.activeElement !== input) input.value = listingLabel(sides[side].value);
+}
+
+function closeCombos() {
+  closeSide("present");
+  closeSide("absent");
+}
+
+function paintList(side) {
+  const list = lists[side];
+  const options = visibleOptions(side);
+  list.replaceChildren();
+  if (!options.length) {
+    const empty = document.createElement("div");
+    empty.className = "combo-empty";
+    empty.textContent = "No listings match";
+    list.append(empty);
+    inputs[side].removeAttribute("aria-activedescendant");
+    return;
+  }
+  if (sides[side].active >= options.length) sides[side].active = 0;
+  let groupName = "";
+  options.forEach((option, index) => {
+    if (option.group !== groupName) {
+      const group = document.createElement("div");
+      group.className = "combo-group";
+      group.textContent = option.group;
+      list.append(group);
+      groupName = option.group;
+    }
+    const choice = document.createElement("div");
+    choice.className = "combo-option";
+    choice.id = `${side}-opt-${index}`;
+    choice.setAttribute("role", "option");
+    choice.dataset.id = option.id;
+    choice.setAttribute("aria-selected", option.id === sides[side].value ? "true" : "false");
+    if (index === sides[side].active) choice.classList.add("is-active");
+    const entry = view.resolved?.[option.id];
+    const pairs = entry?.ok ? ` · ${formatCount(entry.pairCount)} pairs` : "";
+    choice.textContent = `${option.name}${pairs}`;
+    choice.addEventListener("mousedown", (event) => event.preventDefault());
+    choice.addEventListener("click", () => choose(side, option.id));
+    list.append(choice);
+  });
+  const active = list.querySelector(".is-active");
+  inputs[side].setAttribute("aria-activedescendant", active ? active.id : "");
+  active?.scrollIntoView({ block: "nearest" });
+}
+
+function openSide(side, { resetQuery = true } = {}) {
+  const other = otherSide(side);
+  if (sides[other].open) closeSide(other);
+  sides[side].open = true;
+  if (resetQuery) sides[side].query = "";
+  const selected = visibleOptions(side).findIndex((option) => option.id === sides[side].value);
+  sides[side].active = selected >= 0 ? selected : 0;
+  const input = inputs[side];
+  input.setAttribute("aria-expanded", "true");
+  input.closest(".combo").classList.add("open");
+  lists[side].hidden = false;
+  paintList(side);
+}
+
+function choose(side, id) {
+  const previous = sides[side].value;
+  const other = otherSide(side);
+  if (id !== previous) {
+    sides[side].value = id;
+    if (sides[other].value === id) sides[other].value = previous;
+  }
+  closeSide(side, false);
+  inputs[side].blur();
+  render();
+}
+
+function moveActive(side, delta) {
+  const count = visibleOptions(side).length;
+  if (!count) return;
+  sides[side].active = (sides[side].active + delta + count) % count;
+  paintList(side);
+}
+
+function onComboKeydown(side, event) {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    if (!sides[side].open) openSide(side);
+    else moveActive(side, 1);
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    if (!sides[side].open) openSide(side);
+    else moveActive(side, -1);
+  } else if (event.key === "Enter") {
+    if (!sides[side].open) return;
+    event.preventDefault();
+    const option = visibleOptions(side)[sides[side].active];
+    if (option) choose(side, option.id);
+  } else if (event.key === "Escape") {
+    if (!sides[side].open) return;
+    event.preventDefault();
+    closeSide(side, false);
+    inputs[side].value = listingLabel(sides[side].value);
+  } else if (event.key === "Home" && sides[side].open) {
+    event.preventDefault();
+    sides[side].active = 0;
+    paintList(side);
+  } else if (event.key === "End" && sides[side].open) {
+    event.preventDefault();
+    const count = visibleOptions(side).length;
+    sides[side].active = Math.max(0, count - 1);
+    paintList(side);
+  }
+}
+
+function syncComboText() {
+  for (const side of ["present", "absent"]) {
+    if (document.activeElement === inputs[side]) continue;
+    inputs[side].value = listingLabel(sides[side].value);
+    if (sides[side].open) paintList(side);
+  }
 }
 
 function renderStatus() {
@@ -111,71 +243,93 @@ function renderStatus() {
   lede.textContent = "Each side can be an exchange market or a country group. Spot, perpetual, and dated futures stay separate.";
 }
 
-function renderMatrix(resolved, present, absent) {
-  const key = `${view.snapshot?.updatedAt || ""}|${stableInput.checked}|${present}|${absent}`;
-  if (key === view.matrixKey && matrixEl.childElementCount) return;
-  view.matrixKey = key;
-  const matrix = buildMatrix(resolved, OPTIONS, stableInput.checked);
-  matrixEl.replaceChildren();
-  const columns = `168px repeat(${OPTIONS.length}, minmax(52px, 1fr))`;
-  const head = document.createElement("div");
-  head.className = "matrix-head";
-  head.style.gridTemplateColumns = columns;
-  head.append(document.createElement("span"));
-  for (const option of OPTIONS) {
-    const label = document.createElement("span");
-    label.textContent = option.short;
-    label.title = option.name;
-    head.append(label);
-  }
-  matrixEl.append(head);
-  matrixNote.textContent = "Rows and columns use the same listings as the menus, including Binance spot next to Binance perpetual and each country group.";
+function exchangeLogo(exchange) {
+  const mark = document.createElement("span");
+  mark.className = "ex-logo";
+  mark.title = exchange.label;
+  const img = document.createElement("img");
+  img.alt = exchange.label;
+  img.width = 26;
+  img.height = 26;
+  if (exchange.id) img.src = `https://s2.coinmarketcap.com/static/img/exchanges/64x64/${exchange.id}.png`;
+  img.addEventListener("error", () => {
+    img.remove();
+    mark.textContent = exchange.short || exchange.name.slice(0, 2);
+  });
+  if (exchange.id) mark.append(img);
+  else mark.textContent = exchange.short || exchange.name.slice(0, 2);
+  return mark;
+}
 
-  for (const row of matrix.rows) {
-    const line = document.createElement("div");
-    line.className = "matrix-row";
-    line.style.gridTemplateColumns = columns;
-    const label = document.createElement("div");
-    label.className = "row-label";
-    label.textContent = row.name;
-    label.title = row.ok ? `${formatCount(row.pairCount)} pairs` : "Pair feed unavailable";
-    line.append(label);
-    for (const cell of row.cells) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `cell ${cell.kind}`;
-      button.textContent = cell.count === null ? "·" : String(cell.count);
-      button.disabled = cell.kind !== "gap";
-      if (cell.kind === "gap") {
-        button.style.background = gapColor(cell.count, matrix.maxGap);
-        button.title = `${cell.count} on ${optionName(row.slug)}, none on ${optionName(cell.slug)}`;
-        button.addEventListener("click", () => {
-          presentSelect.value = row.slug;
-          absentSelect.value = cell.slug;
-          render();
-        });
-      } else if (cell.kind === "self") {
-        button.title = `${optionName(row.slug)} lists ${cell.count} assets`;
-      }
-      if (row.slug === present && cell.slug === absent) button.classList.add("selected");
-      line.append(button);
-    }
-    matrixEl.append(line);
+function hidePopover() {
+  window.clearTimeout(hidePopoverTimer);
+  popover.hidden = true;
+  popover.replaceChildren();
+}
+
+function scheduleHidePopover() {
+  window.clearTimeout(hidePopoverTimer);
+  hidePopoverTimer = window.setTimeout(hidePopover, 160);
+}
+
+function showPopover(anchor, exchanges) {
+  window.clearTimeout(hidePopoverTimer);
+  popover.replaceChildren();
+  for (const exchange of exchanges) {
+    const item = document.createElement("div");
+    item.className = "ex-pop-item";
+    item.append(exchangeLogo(exchange), document.createTextNode(exchange.label));
+    popover.append(item);
+  }
+  popover.hidden = false;
+  const rect = anchor.getBoundingClientRect();
+  const width = 260;
+  let left = rect.left;
+  if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+  popover.style.left = `${Math.max(8, left)}px`;
+  popover.style.top = `${rect.bottom + 6}px`;
+  const popRect = popover.getBoundingClientRect();
+  if (popRect.bottom > window.innerHeight - 8) {
+    popover.style.top = `${Math.max(8, rect.top - popRect.height - 6)}px`;
   }
 }
 
-function render() {
-  renderStatus();
-  const resolved = resolvedListings();
-  fillSelect(presentSelect, resolved, PRESENT_DEFAULT, PRESENT_DEFAULT);
-  fillSelect(absentSelect, resolved, ABSENT_DEFAULT, ABSENT_DEFAULT);
-  if (absentSelect.value === presentSelect.value) {
-    absentSelect.value = OPTIONS.find((option) => option.id !== presentSelect.value)?.id || presentSelect.value;
+function renderMissing(container, exchanges) {
+  container.replaceChildren();
+  if (!exchanges.length) {
+    container.textContent = "—";
+    return;
   }
-  const present = presentSelect.value;
-  const absent = absentSelect.value;
-  const state = comparisonState(resolved, present, absent);
-  const stats = state.ok ? overlapStats(resolved, present, absent, stableInput.checked) : null;
+  const shown = exchanges.slice(0, LOGO_LIMIT);
+  const rest = exchanges.slice(LOGO_LIMIT);
+  const row = document.createElement("div");
+  row.className = "ex-logos";
+  for (const exchange of shown) row.append(exchangeLogo(exchange));
+  if (rest.length) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "ex-more";
+    more.textContent = `+${rest.length}`;
+    more.setAttribute("aria-label", `${rest.length} more exchanges`);
+    const open = () => showPopover(more, rest);
+    more.addEventListener("mouseenter", open);
+    more.addEventListener("focus", open);
+    more.addEventListener("mouseleave", scheduleHidePopover);
+    more.addEventListener("blur", scheduleHidePopover);
+    row.append(more);
+  }
+  container.append(row);
+}
+
+function render() {
+  hidePopover();
+  renderStatus();
+  view.resolved = resolvedListings();
+  syncComboText();
+  const present = sides.present.value;
+  const absent = sides.absent.value;
+  const state = comparisonState(view.resolved, present, absent);
+  const stats = state.ok ? overlapStats(view.resolved, present, absent, stableInput.checked) : null;
 
   statsEl.replaceChildren();
   const cards = stats
@@ -197,8 +351,6 @@ function render() {
     statsEl.append(card);
   }
 
-  renderMatrix(resolved, present, absent);
-
   const loading = !view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle";
   tableTitle.textContent = loading
     ? "Collecting pairs"
@@ -210,7 +362,7 @@ function render() {
     : "";
 
   let gaps = state.ok
-    ? filterGaps(resolved, {
+    ? filterGaps(view.resolved, {
         present,
         absent,
         query: queryInput.value,
@@ -245,7 +397,7 @@ function render() {
       </td>
       <td class="num">${escapeHtml(formatCount(asset.pairs))}</td>
       <td class="quotes"></td>
-      <td><div class="pills"></div></td>
+      <td class="missing"></td>
     `;
     const link = tr.querySelector("a");
     link.textContent = asset.symbol;
@@ -262,25 +414,10 @@ function render() {
     tr.querySelector(".quotes").textContent = extra > 0
       ? `${shownQuotes.join(" · ")} +${extra}`
       : shownQuotes.join(" · ");
-    const pills = tr.querySelector(".pills");
-    const missing = missingElsewhere(asset.id, resolved, OPTIONS, absent, present);
-    const shown = missing.slice(0, 8);
-    if (shown.length === 0) {
-      pills.textContent = "Listed on the other country groups and sibling markets";
-    } else {
-      for (const short of shown) {
-        const pill = document.createElement("span");
-        pill.className = "pill";
-        pill.textContent = short;
-        pills.append(pill);
-      }
-      if (missing.length > shown.length) {
-        const more = document.createElement("span");
-        more.className = "pill";
-        more.textContent = `+${missing.length - shown.length}`;
-        pills.append(more);
-      }
-    }
+    renderMissing(
+      tr.querySelector(".missing"),
+      missingExchanges(asset.id, view.resolved, OPTIONS, EXCHANGES, absent, present),
+    );
     rowsEl.append(tr);
   }
 }
@@ -288,24 +425,56 @@ function render() {
 async function pull() {
   const response = await fetch("/api/snapshot");
   view.snapshot = await response.json();
-  view.matrixKey = "";
   render();
   if (!view.snapshot || view.snapshot.phase === "loading" || view.snapshot.phase === "idle") {
     view.timer = window.setTimeout(pull, 700);
   }
 }
 
-presentSelect.addEventListener("change", render);
-absentSelect.addEventListener("change", render);
-queryInput.addEventListener("input", render);
-stableInput.addEventListener("change", () => {
-  view.matrixKey = "";
-  render();
+for (const side of ["present", "absent"]) {
+  const input = inputs[side];
+  input.addEventListener("focus", () => {
+    openSide(side);
+    input.select();
+  });
+  input.addEventListener("input", () => {
+    sides[side].query = input.value;
+    sides[side].active = 0;
+    if (!sides[side].open) openSide(side, { resetQuery: false });
+    else paintList(side);
+  });
+  input.addEventListener("keydown", (event) => onComboKeydown(side, event));
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (!input.closest(".combo").contains(document.activeElement)) closeSide(side);
+    }, 0);
+  });
+  const toggle = input.parentElement.querySelector(".combo-toggle");
+  toggle.addEventListener("mousedown", (event) => event.preventDefault());
+  toggle.addEventListener("click", () => {
+    if (sides[side].open) {
+      closeSide(side, false);
+      input.value = listingLabel(sides[side].value);
+      return;
+    }
+    input.focus();
+  });
+}
+
+popover.addEventListener("mouseenter", () => window.clearTimeout(hidePopoverTimer));
+popover.addEventListener("mouseleave", scheduleHidePopover);
+document.addEventListener("pointerdown", (event) => {
+  if (!event.target.closest(".combo")) closeCombos();
+  if (!event.target.closest(".ex-more") && !event.target.closest(".ex-pop")) hidePopover();
 });
+window.addEventListener("scroll", hidePopover, true);
+queryInput.addEventListener("input", render);
+stableInput.addEventListener("change", render);
 document.querySelector("#swap").addEventListener("click", () => {
-  const next = presentSelect.value;
-  presentSelect.value = absentSelect.value;
-  absentSelect.value = next;
+  const next = sides.present.value;
+  sides.present.value = sides.absent.value;
+  sides.absent.value = next;
+  closeCombos();
   render();
 });
 document.querySelector("#refresh").addEventListener("click", async () => {
@@ -323,4 +492,6 @@ for (const button of document.querySelectorAll("th button")) {
   });
 }
 
+presentInput.value = optionName(PRESENT_DEFAULT);
+absentInput.value = optionName(ABSENT_DEFAULT);
 pull();
