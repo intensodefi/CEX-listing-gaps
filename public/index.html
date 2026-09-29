@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CEX listing gaps</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="mast">
+      <div>
+        <p class="eyebrow">CoinMarketCap · active exchange markets</p>
+        <h1>Listing gaps</h1>
+        <p class="lede" id="lede">Which top assets trade on one major exchange and not another.</p>
+      </div>
+      <div class="mast-meta">
+        <p id="status-line">Waiting for market data</p>
+        <button type="button" id="refresh" class="text-button">Refresh</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Comparison">
+      <label>
+        Listed on
+        <select id="present"></select>
+      </label>
+      <button type="button" id="swap" class="swap" aria-label="Swap exchanges">Swap</button>
+      <label>
+        Missing from
+        <select id="absent"></select>
+      </label>
+      <label class="search">
+        Search
+        <input id="query" type="search" placeholder="Symbol or name" autocomplete="off" />
+      </label>
+      <label class="check">
+        <input id="include-stable" type="checkbox" />
+        Include stablecoins
+      </label>
+    </section>
+
+    <section class="stats" id="stats" aria-live="polite"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Gap map</h2>
+        <p>Each cell is the number of assets listed on the row exchange and missing from the column exchange. Select a cell to open that pair.</p>
+      </div>
+      <div class="matrix-scroll">
+        <div id="matrix" class="matrix"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 id="table-title">Assets</h2>
+        <p id="table-note"></p>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th><button type="button" data-sort="rank">Rank</button></th>
+              <th><button type="button" data-sort="symbol">Asset</button></th>
+              <th><button type="button" data-sort="price">Price</button></th>
+              <th><button type="button" data-sort="marketCap">Market cap</button></th>
+              <th><button type="button" data-sort="change24h">24h</button></th>
+              <th><button type="button" data-sort="markets">Markets</button></th>
+              <th>Also missing from</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="empty" hidden>No assets match this comparison.</p>
+    </section>
+
+    <footer>
+      <p>
+        Listed means CoinMarketCap currently tracks an active market for that asset on the exchange.
+        The universe is the top assets by market cap. The API key stays on the server.
+      </p>
+    </footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
