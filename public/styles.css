@@ -422,6 +422,13 @@ th .col-filter:disabled { opacity: 0.35; cursor: default; }
   line-height: 1.4;
 }
 
+.filter-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.filter-actions .text-button { margin-top: 0; }
+
 .filter-panel input[type="search"] { height: 36px; }
 
 .filter-options {

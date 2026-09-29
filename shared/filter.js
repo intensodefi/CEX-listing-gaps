@@ -1,14 +1,21 @@
+function selectionMatches(selection, values) {
+  if (!selection || selection.mode === "all" || !selection.mode) return true;
+  if (selection.mode === "none") return false;
+  const picked = selection.values || [];
+  return values.some((value) => picked.includes(value));
+}
+
 export function columnFiltersActive(filters = {}) {
-  return ["platform", "tag", "missing"].some((key) => (filters[key] || []).length > 0);
+  return ["platform", "tag", "missing"].some((key) => {
+    const selection = filters[key];
+    return Boolean(selection && selection.mode && selection.mode !== "all");
+  });
 }
 
 export function matchesColumnFilters(row, filters = {}) {
-  const excludedPlatforms = filters.platform || [];
-  const excludedTags = filters.tag || [];
-  const excludedMissing = filters.missing || [];
-  // An empty list means every value stays selected. A listed value is hidden.
-  if (excludedPlatforms.includes(row.platform)) return false;
-  if (excludedTags.some((tag) => (row.tags || []).includes(tag))) return false;
-  if (excludedMissing.some((label) => (row.missing || []).includes(label))) return false;
+  const platform = row.platform ? [row.platform] : [];
+  if (!selectionMatches(filters.platform, platform)) return false;
+  if (!selectionMatches(filters.tag, row.tags || [])) return false;
+  if (!selectionMatches(filters.missing, row.missing || [])) return false;
   return true;
 }

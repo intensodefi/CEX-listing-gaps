@@ -43,7 +43,11 @@ const view = {
   sort: "pairs",
   direction: -1,
   timer: null,
-  filters: { platform: [], tag: [], missing: [] },
+  filters: {
+    platform: { mode: "all", values: [] },
+    tag: { mode: "all", values: [] },
+    missing: { mode: "all", values: [] },
+  },
   filterKey: "",
   filterQuery: "",
   described: [],
@@ -51,9 +55,9 @@ const view = {
 
 const FILTER_LABELS = { platform: "Platform", tag: "Tags", missing: "Also missing from" };
 const FILTER_HINTS = {
-  platform: "Every platform starts selected. Uncheck one to hide assets on it.",
-  tag: "Every tag starts selected. Uncheck one to hide assets that have it.",
-  missing: "Every exchange starts selected. Uncheck one to hide assets missing from it.",
+  platform: "All platforms start selected. With one checked, only that chain stays.",
+  tag: "All tags start selected. With one checked, only assets with that tag stay.",
+  missing: "All exchanges start selected. With one checked, only assets missing from it stay.",
 };
 const filterPanel = document.querySelector("#filter-panel");
 const filterTitle = document.querySelector("#filter-title");
@@ -404,8 +408,16 @@ function comparedBooks() {
   };
 }
 
+function freshFilters() {
+  return {
+    platform: { mode: "all", values: [] },
+    tag: { mode: "all", values: [] },
+    missing: { mode: "all", values: [] },
+  };
+}
+
 function clearColumnFilters() {
-  view.filters = { platform: [], tag: [], missing: [] };
+  view.filters = freshFilters();
   closeFilter();
 }
 
@@ -430,8 +442,11 @@ function displayedRows() {
   return view.described.filter((row) => matchesColumnFilters(row, view.filters));
 }
 
-function filterChoices(key) {
-  const narrowed = view.described.filter((row) => matchesColumnFilters(row, { ...view.filters, [key]: [] }));
+function filterUniverse(key) {
+  const narrowed = view.described.filter((row) => matchesColumnFilters(row, {
+    ...view.filters,
+    [key]: { mode: "all", values: [] },
+  }));
   const counts = new Map();
   for (const row of narrowed) {
     const values = key === "platform" ? [row.platform] : row[key === "tag" ? "tags" : "missing"];
@@ -440,13 +455,35 @@ function filterChoices(key) {
       counts.set(value, (counts.get(value) || 0) + 1);
     }
   }
-  for (const value of view.filters[key] || []) {
+  const picked = view.filters[key]?.mode === "pick" ? view.filters[key].values : [];
+  for (const value of picked) {
     if (!counts.has(value)) counts.set(value, 0);
   }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+function filterChoices(key) {
   const query = view.filterQuery.trim().toLowerCase();
-  return [...counts.entries()]
-    .filter(([value]) => !query || value.toLowerCase().includes(query))
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return filterUniverse(key).filter(([value]) => !query || value.toLowerCase().includes(query));
+}
+
+function selectionFor(key, values) {
+  if (!values.length) return { mode: "none", values: [] };
+  const universe = new Set(filterUniverse(key).map(([value]) => value));
+  if (universe.size && [...universe].every((value) => values.includes(value))) return { mode: "all", values: [] };
+  return { mode: "pick", values };
+}
+
+function toggleFilterValue(key, value, checked) {
+  const universe = filterUniverse(key).map(([item]) => item);
+  const selection = view.filters[key] || { mode: "all", values: [] };
+  let next;
+  if (selection.mode === "none") next = checked ? [value] : [];
+  else if (selection.mode === "pick") {
+    next = selection.values.filter((item) => item !== value);
+    if (checked) next = [...next, value];
+  } else next = checked ? universe : universe.filter((item) => item !== value);
+  view.filters[key] = selectionFor(key, next);
 }
 
 function paintFilterOptions() {
@@ -461,16 +498,16 @@ function paintFilterOptions() {
     filterOptions.append(empty);
     return;
   }
-  const excluded = new Set(view.filters[key]);
+  const selection = view.filters[key] || { mode: "all", values: [] };
+  const picked = new Set(selection.mode === "pick" ? selection.values : []);
   for (const [value, count] of choices) {
     const label = document.createElement("label");
     label.className = "filter-option";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = !excluded.has(value);
+    input.checked = selection.mode === "all" || (selection.mode === "pick" && picked.has(value));
     input.addEventListener("change", () => {
-      const without = view.filters[key].filter((item) => item !== value);
-      view.filters[key] = input.checked ? without : [...without, value];
+      toggleFilterValue(key, value, input.checked);
       render();
     });
     const name = document.createElement("span");
@@ -521,10 +558,12 @@ function syncFilterButtons() {
   const profilesReady = view.snapshot?.profilesReady === true;
   for (const button of document.querySelectorAll(".col-filter")) {
     const key = button.dataset.filter;
-    const count = (view.filters[key] || []).length;
-    button.classList.toggle("on", count > 0);
+    const selection = view.filters[key] || { mode: "all", values: [] };
+    const active = selection.mode !== "all";
+    const count = selection.mode === "pick" ? selection.values.length : 0;
+    button.classList.toggle("on", active);
     const badge = button.querySelector(".filter-count");
-    badge.hidden = count === 0;
+    badge.hidden = !active;
     badge.textContent = String(count);
     button.disabled = key !== "missing" && !profilesReady;
   }
@@ -816,9 +855,14 @@ filterSearch.addEventListener("input", () => {
 filterSearch.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeFilter();
 });
-document.querySelector("#filter-clear").addEventListener("click", () => {
+document.querySelector("#filter-select-all").addEventListener("click", () => {
   if (!view.filterKey) return;
-  view.filters[view.filterKey] = [];
+  view.filters[view.filterKey] = { mode: "all", values: [] };
+  render();
+});
+document.querySelector("#filter-deselect-all").addEventListener("click", () => {
+  if (!view.filterKey) return;
+  view.filters[view.filterKey] = { mode: "none", values: [] };
   render();
 });
 for (const button of document.querySelectorAll(".col-filter")) {

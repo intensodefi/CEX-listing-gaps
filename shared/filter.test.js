@@ -8,28 +8,40 @@ const row = {
   missing: ["Coinbase · Perpetual", "Kraken · Perpetual"],
 };
 
-test("an empty column filter keeps every row", () => {
-  assert.equal(columnFiltersActive({ platform: [], tag: [], missing: [] }), false);
+const all = { mode: "all", values: [] };
+const none = { mode: "none", values: [] };
+const pick = (values) => ({ mode: "pick", values });
+
+test("selecting every value keeps every row", () => {
+  assert.equal(columnFiltersActive({ platform: all, tag: all, missing: all }), false);
   assert.equal(matchesColumnFilters(row, {}), true);
+  assert.equal(matchesColumnFilters(row, { platform: all, tag: all, missing: all }), true);
 });
 
-test("deselecting a platform, tag, or exchange hides rows that carry it", () => {
-  assert.equal(matchesColumnFilters(row, { platform: ["Ethereum"] }), true);
-  assert.equal(matchesColumnFilters(row, { platform: ["BNB"] }), false);
-  assert.equal(matchesColumnFilters(row, { platform: ["BNB", "Ethereum"] }), false);
-  assert.equal(matchesColumnFilters(row, { tag: ["tokenized-stock"] }), true);
-  assert.equal(matchesColumnFilters(row, { tag: ["layer-1"] }), false);
-  assert.equal(matchesColumnFilters(row, { tag: ["defi", "ai-big-data"] }), false);
-  assert.equal(matchesColumnFilters({ ...row, tags: [] }, { tag: ["layer-1"] }), true);
-  assert.equal(matchesColumnFilters(row, { missing: ["Bitstamp · Spot"] }), true);
-  assert.equal(matchesColumnFilters(row, { missing: ["Kraken · Perpetual"] }), false);
+test("one selected value keeps only rows that match it", () => {
+  assert.equal(columnFiltersActive({ platform: pick(["BNB"]) }), true);
+  assert.equal(matchesColumnFilters(row, { platform: pick(["BNB"]) }), true);
+  assert.equal(matchesColumnFilters(row, { platform: pick(["Ethereum"]) }), false);
+  assert.equal(matchesColumnFilters(row, { platform: pick(["BNB", "Ethereum"]) }), true);
+  assert.equal(matchesColumnFilters(row, { tag: pick(["layer-1"]) }), true);
+  assert.equal(matchesColumnFilters(row, { tag: pick(["tokenized-stock"]) }), false);
+  assert.equal(matchesColumnFilters(row, { tag: pick(["layer-1", "defi"]) }), true);
+  assert.equal(matchesColumnFilters({ ...row, tags: [] }, { tag: pick(["layer-1"]) }), false);
+  assert.equal(matchesColumnFilters(row, { missing: pick(["Kraken · Perpetual"]) }), true);
+  assert.equal(matchesColumnFilters(row, { missing: pick(["Bitstamp · Spot"]) }), false);
+  assert.equal(matchesColumnFilters(row, { platform: none }), false);
+  assert.equal(columnFiltersActive({ tag: none }), true);
 });
 
 test("column filters apply together", () => {
-  const filters = { platform: ["Ethereum"], tag: ["tokenized-stock"], missing: ["Bitstamp · Spot"] };
+  const filters = {
+    platform: pick(["BNB"]),
+    tag: pick(["ai-big-data"]),
+    missing: pick(["Kraken · Perpetual"]),
+  };
   assert.equal(columnFiltersActive(filters), true);
   assert.equal(matchesColumnFilters(row, filters), true);
-  assert.equal(matchesColumnFilters(row, { ...filters, platform: ["BNB"] }), false);
-  assert.equal(matchesColumnFilters(row, { ...filters, tag: ["layer-1"] }), false);
-  assert.equal(matchesColumnFilters(row, { ...filters, missing: ["Kraken · Perpetual"] }), false);
+  assert.equal(matchesColumnFilters(row, { ...filters, platform: pick(["Ethereum"]) }), false);
+  assert.equal(matchesColumnFilters(row, { ...filters, tag: pick(["tokenized-stock"]) }), false);
+  assert.equal(matchesColumnFilters(row, { ...filters, missing: none }), false);
 });

@@ -112,10 +112,13 @@
     </footer>
     <div id="filter-panel" class="filter-panel" hidden>
       <p id="filter-title">Filter</p>
-      <p id="filter-hint" class="filter-hint" hidden>Every value starts selected. Uncheck one to hide it.</p>
+      <p id="filter-hint" class="filter-hint" hidden>All values start selected. With one value checked, only matching rows stay.</p>
       <input id="filter-search" type="search" placeholder="Search values" autocomplete="off" />
       <div id="filter-options" class="filter-options"></div>
-      <button type="button" id="filter-clear" class="text-button">Clear</button>
+      <div class="filter-actions">
+        <button type="button" id="filter-select-all" class="text-button">Select all</button>
+        <button type="button" id="filter-deselect-all" class="text-button">Deselect all</button>
+      </div>
     </div>
     <script type="module" src="/app.js"></script>
   </body>
