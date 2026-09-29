@@ -4,6 +4,15 @@ Compares listings built from every market pair CoinMarketCap tracks. Each side o
 
 A coin counts as listed only when it is the base of at least one pair in that listing. A country listing is the union of its exchanges.
 
+## Use cases
+
+- **Same exchange, two markets.** Compare Binance perpetual with Binance spot. The table lists assets that have a perpetual pair on Binance and no spot pair there. Swap the sides for assets on Binance spot with no Binance perpetual.
+- **One exchange against another.** Compare Coinbase spot with Kraken spot to see which bases one book lists and the other does not.
+- **One country against another.** Compare South Korea spot with United States spot. A coin is on a country when at least one of that country's exchanges lists it. With a country selected, the page lists the member exchanges: Coinbase, Kraken, Gemini, and Binance.US for the United States; Upbit, Bithumb, Coinone, Korbit, and GOPAX for South Korea; bitFlyer, Bitbank, and Coincheck for Japan; Bitstamp and Bitvavo for Europe; Binance, Bybit, OKX, KuCoin, Gate, Bitget, MEXC, HTX, and Crypto.com for Global.
+- **A country against one exchange.** Compare Japan spot with Binance spot to see assets listed on a Japanese exchange and absent from Binance spot.
+- **The same gap on other books.** Also missing from shows which other listings lack each asset. Check one exchange in that column to keep rows missing from that exchange.
+- **A chain, a tag, or a handoff.** Check one platform, such as Ethereum, or one tag. The table keeps rows that match. Export CSV downloads the rows on screen, including tags, platform, and contract address. Stablecoins stay out of the table until Include stablecoins is checked.
+
 ## Data
 
 - Spot: CoinMarketCap exchange market pairs. This API plan does not enable `/v1/exchange/market-pairs/latest`.
