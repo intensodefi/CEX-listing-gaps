@@ -1,4 +1,4 @@
-import { EXCHANGES } from "/shared/exchanges.js";
+import { EXCHANGES, REGIONS } from "/shared/exchanges.js";
 import { comparisonState, filterGaps, missingExchanges, overlapStats } from "/shared/compare.js";
 import { platformLabel, tableToCsv } from "/shared/csv.js";
 import { columnFiltersActive, matchesColumnFilters } from "/shared/filter.js";
@@ -16,6 +16,7 @@ const stableInput = document.querySelector("#include-stable");
 const statusLine = document.querySelector("#status-line");
 const lede = document.querySelector("#lede");
 const statsEl = document.querySelector("#stats");
+const countryMembersEl = document.querySelector("#country-members");
 const rowsEl = document.querySelector("#rows");
 const emptyEl = document.querySelector("#empty");
 const tableTitle = document.querySelector("#table-title");
@@ -678,9 +679,56 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
+function renderCountryMembers() {
+  const seen = new Set();
+  const groups = [];
+  for (const side of ["present", "absent"]) {
+    const option = optionById(sides[side].value);
+    if (!option || option.kind !== "region" || seen.has(option.region)) continue;
+    seen.add(option.region);
+    const region = REGIONS.find((item) => item.id === option.region);
+    groups.push({
+      name: region?.name || option.region,
+      members: EXCHANGES.filter((exchange) => exchange.region === option.region),
+    });
+  }
+  countryMembersEl.hidden = groups.length === 0;
+  countryMembersEl.replaceChildren();
+  if (!groups.length) return;
+  const caption = document.createElement("p");
+  caption.className = "country-caption";
+  caption.textContent = "Exchanges counted in the selected countries";
+  countryMembersEl.append(caption);
+  for (const group of groups) {
+    const row = document.createElement("div");
+    row.className = "country-row";
+    const title = document.createElement("h3");
+    title.textContent = group.name;
+    const list = document.createElement("ul");
+    for (const exchange of group.members) {
+      const item = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = exchange.name;
+      item.append(
+        exchangeLogo({
+          id: exchange.id,
+          label: exchange.name,
+          short: exchange.short,
+          name: exchange.name,
+        }),
+        name,
+      );
+      list.append(item);
+    }
+    row.append(title, list);
+    countryMembersEl.append(row);
+  }
+}
+
 function render() {
   hidePopover();
   renderStatus();
+  renderCountryMembers();
   view.resolved = resolvedListings();
   syncComboText();
   const present = sides.present.value;
