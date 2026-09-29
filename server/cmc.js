@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { EXCHANGES, MARKETS } from "../shared/exchanges.js";
 import { markStable } from "../shared/compare.js";
+import { refreshAllowed } from "./refresh.js";
 
 const PRO_BASE = "https://pro-api.coinmarketcap.com";
 const SPOT_PAGE = "https://api.coinmarketcap.com/data-api/v3/exchange/market-pairs/latest";
@@ -263,7 +264,10 @@ export function loadFreshCache() {
   state.profileTotal = collectIds(state.books).length;
   state.profileDone = state.profilesReady ? state.profileTotal : Object.keys(state.profiles).length;
   if (Date.now() - Date.parse(cached.updatedAt) > cacheTtl()) {
-    console.log("Cached pair data is older than 7 days. Press Refresh to fetch pairs again.");
+    const next = refreshAllowed()
+      ? "Press Refresh to fetch pairs again."
+      : "Refresh is disabled on this deployment.";
+    console.log(`Cached pair data is older than 7 days. ${next}`);
   }
   return true;
 }

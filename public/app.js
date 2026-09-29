@@ -249,15 +249,31 @@ function syncComboText() {
   }
 }
 
+function refreshEnabled() {
+  return view.snapshot?.refreshEnabled !== false;
+}
+
+function syncRefreshButton() {
+  const button = document.querySelector("#refresh");
+  if (!button) return;
+  button.hidden = !refreshEnabled();
+}
+
 function renderStatus() {
   const snapshot = view.snapshot;
+  syncRefreshButton();
   if (!snapshot) {
     statusLine.textContent = "Contacting the server";
     return;
   }
   if (snapshot.phase === "idle") {
-    statusLine.textContent = "Press Refresh to fetch pairs";
-    lede.textContent = "Pair data stays cached for 7 days. New pairs are fetched only when you press Refresh.";
+    if (refreshEnabled()) {
+      statusLine.textContent = "Press Refresh to fetch pairs";
+      lede.textContent = "Pair data stays cached for 7 days. New pairs are fetched only when you press Refresh.";
+    } else {
+      statusLine.textContent = "No cached pair data";
+      lede.textContent = "Pair data stays cached for 7 days.";
+    }
     return;
   }
   if (snapshot.phase === "loading") {
@@ -274,7 +290,9 @@ function renderStatus() {
   }
   const when = snapshot.updatedAt ? new Date(snapshot.updatedAt).toLocaleString() : "just now";
   const skipped = snapshot.failures?.length ? ` · ${snapshot.failures.length} feeds failed` : "";
-  const stale = snapshot.stale ? " · older than 7 days, press Refresh to fetch again" : "";
+  const stale = snapshot.stale
+    ? (refreshEnabled() ? " · older than 7 days, press Refresh to fetch again" : " · older than 7 days")
+    : "";
   statusLine.textContent = `Updated ${when}${skipped}${stale}`;
   lede.textContent = "Each side can be an exchange market or a country group. Spot, perpetual, and dated futures stay separate.";
 }
@@ -896,7 +914,8 @@ document.querySelector("#swap").addEventListener("click", () => {
   closeCombos();
   render();
 });
-document.querySelector("#refresh").addEventListener("click", async () => {
+document.querySelector("#refresh")?.addEventListener("click", async () => {
+  if (!refreshEnabled()) return;
   statusLine.textContent = "Refreshing every pair";
   await fetch("/api/refresh?force=1", { method: "POST" });
   window.clearTimeout(view.timer);

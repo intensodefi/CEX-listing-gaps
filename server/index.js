@@ -3,6 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureProfiles, getState, loadFreshCache, refreshSnapshot } from "./cmc.js";
+import { refreshAllowed } from "./refresh.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -41,6 +42,16 @@ function sendJson(response, status, payload) {
   response.end(body);
 }
 
+function snapshotPayload() {
+  return { ...getState(), refreshEnabled: refreshAllowed() };
+}
+
+function indexHtml() {
+  const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+  if (refreshAllowed()) return html;
+  return html.replace(/\s*<button type="button" id="refresh" class="text-button">Refresh<\/button>/, "");
+}
+
 function safeFile(rootDir, requestPath) {
   const relative = requestPath.replace(/^\/+/, "");
   const file = path.resolve(rootDir, relative);
@@ -71,21 +82,27 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.method === "GET" && url.pathname === "/api/snapshot") {
-    sendJson(response, 200, getState());
+    sendJson(response, 200, snapshotPayload());
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/refresh") {
+    if (!refreshAllowed()) {
+      sendJson(response, 403, snapshotPayload());
+      return;
+    }
     const force = url.searchParams.get("force") === "1";
     refreshSnapshot({ force }).catch((error) => {
       console.error("Refresh failed:", error.message);
     });
-    sendJson(response, 202, getState());
+    sendJson(response, 202, snapshotPayload());
     return;
   }
 
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-    serveStatic(response, path.join(publicDir, "index.html"));
+    const html = indexHtml();
+    response.writeHead(200, { "Content-Type": TYPES[".html"], "Cache-Control": "no-cache" });
+    response.end(html);
     return;
   }
 
@@ -121,12 +138,15 @@ server.listen(PORT, "0.0.0.0", () => {
     console.error("CMC_API_KEY is missing. Add it to .env before refreshing data.");
     return;
   }
+  const refreshNote = refreshAllowed()
+    ? "New pairs are fetched only when Refresh is pressed."
+    : "Refresh is disabled on this deployment.";
   if (loadFreshCache()) {
-    console.log(`Loaded cached snapshot from ${getState().updatedAt}. New pairs are fetched only when Refresh is pressed.`);
+    console.log(`Loaded cached snapshot from ${getState().updatedAt}. ${refreshNote}`);
     ensureProfiles().catch((error) => {
       console.error("Asset info failed:", error.message);
     });
     return;
   }
-  console.log("No cached snapshot. Press Refresh to fetch pairs.");
+  console.log(`No cached snapshot. ${refreshNote}`);
 });
